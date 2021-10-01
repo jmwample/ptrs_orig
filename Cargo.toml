@@ -1,10 +1,29 @@
 [package]
 name = "ptrs"
+description = "An implementation of the Pluggable Transports protocol."
 version = "0.1.0"
+authors = ["Jack Wampler <jack@wampler.co>"]
+readme = "README.md"
+repository = "https://github.com/jmwample/ptrs"
 edition = "2018"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 thiserror = "1.0.*"
 url = "2,2,2"
+itertools = "0.10.0"
+
+# standard crate data is left out
+[dev-dependencies]
+nix = "0.23.0"
+
+[lib]
+crate-type = ["lib", "staticlib", "dylib"]
+
+
+[[example]]
+name = "dummy-client"
+path = "examples/dummy-client.rs"
+
+[[example]]
+name = "dummy-server"
+path = "examples/dummy-server.rs"
