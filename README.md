@@ -27,3 +27,13 @@ To the extent possible under law, the authors have dedicated all
 copyright and related and neighboring rights to this software to the
 public domain worldwide. This software is distributed without any
 warranty. See COPYING.
+
+## FFI
+
+The library exposes a set of C ABI bindings, those are defined in the `ptrs_ffi.h`
+header file. The C bindings can be used with C/C++, Swift (using a bridging
+header) or C# (using
+[DLLImport](https://docs.microsoft.com/en-us/dotnet/api/system.runtime.interopservices.dllimportattribute?view=netcore-2.2)
+with
+[CallingConvention](https://docs.microsoft.com/en-us/dotnet/api/system.runtime.interopservices.dllimportattribute.callingconvention?view=netcore-2.2)
+set to `Cdecl`).
