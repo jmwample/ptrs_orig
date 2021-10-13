@@ -35,6 +35,7 @@
 pub mod args;
 pub mod error;
 pub mod pt;
+mod socks;
 
 pub mod ffi;
 
