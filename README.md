@@ -1,6 +1,8 @@
 
 # Pluggable Transports in Rust (PTRS)
 
+[![codecov](https://codecov.io/gh/jmwample/ptrs/branch/main/graph/badge.svg?token=M5366KWEA4)](https://codecov.io/gh/jmwample/ptrs)
+
 PTRS is a library for writing Tor pluggable transports in Rust.
 
 * [Pluggable Transport Specification (Version 1)](https://gitweb.torproject.org/torspec.git/tree/pt-spec.txt)
