@@ -9,7 +9,7 @@ on:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
-
+  
 jobs:
 
   test:
@@ -72,10 +72,14 @@ jobs:
       # but open source code does not.
       - name: Upload to codecov.io
         uses: codecov/codecov-action@v1
-        
+        with: 
+          token: ${{ secrets.PTRS_CODECOV_TOKEN }}
+          fail_ci_if_error: true # optional (default = false)
+
   build:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
     - name: Build
       run: cargo build --verbose
+
