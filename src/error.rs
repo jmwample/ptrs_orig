@@ -9,6 +9,13 @@ pub enum PTError {
 	EnvError(#[from] ::std::env::VarError),
 
 	///
+	///
+	/// Note - ::std::io::Error doesn't implement PartialEq so we can't inherit
+	/// from using the from directive as we would like to.
+	#[error("IO-ERROR {0:?}")]
+	IOError(::std::io::ErrorKind),
+
+	///
 	#[error("PARSE-ERROR {0}")]
 	ParseError(String),
 

@@ -15,6 +15,8 @@ itertools = "0.10.0"
 # standard crate data is left out
 [dev-dependencies]
 nix = "0.23.0"
+tempfile = "3.2.0"
+tokio = {version = "1", features=["full"] }
 
 [lib]
 crate-type = ["lib", "staticlib", "dylib"]
@@ -27,3 +29,7 @@ path = "examples/dummy-client.rs"
 [[example]]
 name = "dummy-server"
 path = "examples/dummy-server.rs"
+
+[[example]]
+name = "tokio-dummy-client"
+path = "examples/tokio-dummy-client.rs"

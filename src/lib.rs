@@ -32,6 +32,9 @@
 // uncomment when API and first draft is done
 // #![warn(missing_debug_implementations, rust_2018_idioms, missing_docs)]
 
+// More expressive io errors
+#![feature(io_error_more)]
+
 pub mod args;
 pub mod error;
 pub mod pt;

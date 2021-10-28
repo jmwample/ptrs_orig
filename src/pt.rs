@@ -1,6 +1,8 @@
 //! Pluggable Transports
 
 use std::env;
+use std::fs;
+use std::os::unix::fs::DirBuilderExt;
 use url::Url;
 
 use crate::error::PTError;
@@ -8,6 +10,7 @@ use crate::error::PTError;
 const TOR_PT_PROXY: &str = "TOR_PT_PROXY";
 const TOR_PT_MANAGED_TRANSPORT_VER: &str = "TOR_PT_MANAGED_TRANSPORT_VER";
 const TOR_PT_CLIENT_TRANSPORTS: &str = "TOR_PT_CLIENT_TRANSPORTS";
+const TOR_PT_STATE_LOCATION: &str = "TOR_PT_STATE_LOCATION";
 
 fn emit(keyword: &str, v: &[&str]) {
 	let mut vv = String::new();
@@ -52,10 +55,26 @@ pub fn client_setup() -> Result<ClientInfo, Box<dyn std::error::Error>> {
 	})
 }
 
+/// Returns the directory name in the TOR_PT_STATE_LOCATION environment variable,
+/// creating the directory if it doesn't already exist. Returns non-nil error if
+/// TOR_PT_STATE_LOCATION is not set or if there is an error creating the
+/// directory.
+pub fn make_state_dir() -> Result<String, PTError> {
+	let loc = env::var(TOR_PT_STATE_LOCATION)?;
+	match fs::DirBuilder::new()
+		.recursive(true)
+		.mode(0o700)
+		.create(&loc)
+	{
+		Ok(_) => Ok(loc.to_string()),
+		Err(err) => Err(PTError::IOError(err.kind())),
+	}
+}
+
 /// Get a pluggable transports version offered by Tor and understood by us, if
 /// any. The only version we understand is "1". This function reads the
 /// environment variable TOR_PT_MANAGED_TRANSPORT_VER.
-fn get_managed_transport_version<'a>() -> Result<String, PTError> {
+fn get_managed_transport_version() -> Result<String, PTError> {
 	const TRANSPORT_VERSION: &str = "1";
 	for s in env::var(TOR_PT_MANAGED_TRANSPORT_VER)?.split("") {
 		if s == TRANSPORT_VERSION {
@@ -68,10 +87,10 @@ fn get_managed_transport_version<'a>() -> Result<String, PTError> {
 
 /// Get the list of method names requested by Tor. This function reads the
 /// environment variable TOR_PT_CLIENT_TRANSPORTS.
-fn get_client_transports<'a>() -> Result<Vec<String>, PTError> {
+fn get_client_transports() -> Result<Vec<String>, PTError> {
 	// TOR_PT_CLIENT_TRANSPORTS
 	Ok(env::var(TOR_PT_CLIENT_TRANSPORTS)?
-		.split(",")
+		.split(',')
 		.map(|s| s.to_string())
 		.collect::<Vec<String>>())
 }
@@ -131,9 +150,9 @@ pub fn server_setup() -> Result<ServerInfo, Box<dyn std::error::Error>> {
 fn keyword_is_safe(keyword: &str) -> bool {
 	for b in keyword.chars() {
 		match b {
-			b if '0' <= b && b <= '9' => continue,
-			b if 'A' <= b && b <= 'Z' => continue,
-			b if 'a' <= b && b <= 'z' => continue,
+			b if ('0'..='9').contains(&b) => continue,
+			b if ('A'..='Z').contains(&b) => continue,
+			b if ('a'..='z').contains(&b) => continue,
 			'-' => continue,
 			'_' => continue,
 			_ => return false,
@@ -158,6 +177,88 @@ fn arg_is_safe(arg: &str) -> bool {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use tempfile;
+
+	#[test]
+	fn test_make_state_dir() {
+		// TOR_PT_STATE_LOCATION is not set
+		env::remove_var(TOR_PT_STATE_LOCATION);
+		match make_state_dir() {
+			Ok(path) => panic!("empty environment unexpectedly returned {:?}", path),
+
+			Err(err) => {
+				assert_eq!(
+					err,
+					PTError::from(env::VarError::NotPresent),
+					"empty environment returned unexpected error: {}",
+					err
+				);
+			}
+		}
+
+		// tempdir and all contents are destroyed when var goes out of scope.
+		// [See tempfile docs](https://docs.rs/tempfile/3.2.0/tempfile/)
+		let temp_dir = match tempfile::Builder::new()
+			.prefix("testMakeStateDir")
+			.tempdir()
+		{
+			Ok(d) => d,
+			Err(e) => panic!("tempfile::tempdir() failed: {}", e),
+		};
+
+		let good_cases = [
+			// Directory already in existence
+			temp_dir.path().to_path_buf(),
+			// Nonexistent directory, parent exists.
+			temp_dir.path().join("parentExists"),
+			// Nonexistent directory, parent doesn't exist.
+			temp_dir.path().join("missingParent").join("parentMissing"),
+			// Directory already in existence with different permissions
+			temp_dir.path().join("non700permissions"),
+		];
+		for path in good_cases {
+			env::set_var(TOR_PT_STATE_LOCATION, &path);
+			match make_state_dir() {
+				Ok(p) => assert_eq!(
+					std::path::PathBuf::from(&p),
+					path,
+					"MakeStateDir returned an unexpected path {} (expecting {})",
+					p,
+					path.to_string_lossy()
+				),
+				Err(err) => panic!("MakeStateDir unexpectedly failed: {}", err),
+			}
+		}
+
+		// Name already exists, but is an ordinary file.
+		let temp_file = temp_dir.path().join("my-temporary-note.txt");
+		let _file = fs::File::create(&temp_file).unwrap();
+		env::set_var(TOR_PT_STATE_LOCATION, &temp_file);
+
+		match make_state_dir() {
+			Ok(_) => panic!("MakeStateDir with an existing file unexpectedly succeeded"),
+			Err(err) => assert_eq!(
+				err,
+				PTError::IOError(::std::io::ErrorKind::AlreadyExists),
+				"MakeStateDir with an existing file returned unexpected error: {} (expected {})",
+				err,
+				PTError::IOError(::std::io::ErrorKind::AlreadyExists),
+			),
+		}
+
+		// Directory name that cannot be created. (sub-dir of a file)
+		env::set_var(TOR_PT_STATE_LOCATION, &temp_file.as_path().join("subdir"));
+		match make_state_dir() {
+			Ok(_) => panic!("MakeStateDir with a subdirectory of a file unexpectedly succeeded"),
+			Err(err) => assert_eq!(
+				err,
+				PTError::IOError(::std::io::ErrorKind::NotADirectory),
+				"MakeStateDir with a subdirectory of a file returned unexpected error: {} (expected {})",
+				err,
+				PTError::IOError(::std::io::ErrorKind::NotADirectory),
+			),
+		}
+	}
 
 	#[test]
 	fn test_resolve_addr() {
@@ -216,11 +317,6 @@ mod tests {
 
 	#[test]
 	fn test_ext_or_port_setup_fail_set_deadline() {
-		todo!()
-	}
-
-	#[test]
-	fn test_make_state_dir() {
 		todo!()
 	}
 
