@@ -174,10 +174,250 @@ fn arg_is_safe(arg: &str) -> bool {
 	true
 }
 
+/// Encode a string according to the CString rules of section 2.1.1 in
+/// control-spec.txt.
+/// 	CString = DQUOTE *qcontent DQUOTE
+/// "...in a CString, the escapes '\n', '\t', '\r', and the octal escapes '\0'
+/// ... '\377' represent newline, tab, carriage return, and the 256 possible
+/// octet values respectively."
+/// RFC 2822 section 3.2.5 in turn defines what byte values we need to escape:
+/// everything but
+/// 	NO-WS-CTL /     ; Non white space controls
+/// 	%d33 /          ; The rest of the US-ASCII
+/// 	%d35-91 /       ;  characters not including "\"
+/// 	%d93-126        ;  or the quote character
+/// Technically control-spec.txt requires us to escape the space character (32),
+/// but it is an error in the spec: https://bugs.torproject.org/29432.
+///
+/// We additionally need to ensure that whatever we return passes argIsSafe,
+/// because strings encoded by this function are printed verbatim by Log.
+fn encode_cstring(s: &str) -> String {
+	let mut out = String::from("\"");
+
+	for b in s.chars() {
+		match b {
+			b if (' '..='!').contains(&b) => out.push(b), // 32 || 33
+			b if ('#'..='[').contains(&b) => out.push(b), // [35..=91]
+			b if (']'..='~').contains(&b) => out.push(b), // [93..=126]
+			_ => out.push_str(&format!("\\{:03o}", b as u8)),
+		}
+	}
+	out.push('"');
+	out
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
 	use tempfile;
+
+	/// Compare with unescape_string in tor's src/lib/encoding/cstring.c. That
+	/// function additionally allows hex escapes, but control-spec.txt's CString
+	/// doesn't say anything about that.
+	fn decode_cstring(enc: &str) -> Result<String, PTError> {
+		let mut result: String = String::new();
+		let mut state = "^";
+		let mut num = 0;
+		let b: Vec<char> = enc.chars().collect();
+
+		const RADIX: u32 = 8;
+		// let x = "134";
+
+		let mut i = 0;
+		while i < b.len() {
+			let c = b[i];
+			match state {
+				"^" => {
+					if c != '"' {
+						return Err(PTError::ParseError("missing start quote".to_string()));
+					}
+					state = "."
+				}
+				"." => match c {
+					'\\' => state = "\\",
+					'"' => state = "$",
+					_ => result.push(c),
+				},
+				"\\" => match c {
+					'n' => {
+						result.push('\n');
+						state = ".";
+					}
+					't' => {
+						result.push('\t');
+						state = ".";
+					}
+					'r' => {
+						result.push('\r');
+						state = ".";
+					}
+					'"' | '\\' => {
+						result.push(c);
+						state = ".";
+					}
+					c if ('0'..='7').contains(&c) => {
+						num = c.to_digit(RADIX).unwrap(); // will never panic due to case check
+						state = "o1";
+					}
+					_ => return Err(PTError::ParseError("unknown escape sequence".to_string())),
+				},
+				"o1" => {
+					// first octal digit read
+					match c {
+						c if ('0'..='7').contains(&c) => {
+							num = num * RADIX + c.to_digit(RADIX).unwrap();
+							state = "o2"
+						}
+						_ => {
+							if num > 255 {
+								return Err(PTError::ParseError(
+									"invalid octal escape".to_string(),
+								));
+							}
+							result.push(char::from_u32(num).unwrap());
+							state = ".";
+							continue; // process current byte again????
+						}
+					}
+				}
+				"o2" => {
+					// second octal digit read
+					match c {
+						c if ('0'..='7').contains(&c) => {
+							num = num * RADIX + c.to_digit(RADIX).unwrap();
+							if num > 255 {
+								return Err(PTError::ParseError(
+									"invalid octal escape".to_string(),
+								));
+							}
+							result.push(char::from_u32(num).unwrap());
+							state = "."
+						}
+						_ => {
+							if num > 255 {
+								return Err(PTError::ParseError(
+									"invalid octal escape".to_string(),
+								));
+							}
+							result.push(char::from_u32(num).unwrap());
+							state = ".";
+							continue; // process current byte again????
+						}
+					}
+				}
+				"$" => return Err(PTError::ParseError("trailing garbage".to_string())),
+				_ => {
+					return Err(PTError::ParseError(
+						"decode_cstring entered unknown state".to_string(),
+					));
+				}
+			}
+			i += 1
+		}
+
+		Ok(result)
+	}
+
+	fn rountrip_encode_cstring(src: &str) -> Result<String, PTError> {
+		let enc = encode_cstring(src);
+		let dec = decode_cstring(&enc)?;
+		assert_eq!(dec, src);
+		Ok(enc)
+	}
+
+	#[test]
+	fn test_encode_cstring() {
+		let bytes = (0..=255).collect::<Vec<u8>>();
+		// through Vec<char> first because from_utf8 checks <= 127.
+		let vec_of_chars: Vec<char> = bytes.iter().map(|byte| *byte as char).collect();
+		let all_bytes = vec_of_chars.iter().cloned().collect::<String>();
+		let test_cases = vec![
+			"",
+			"\"",
+			"\"\"",
+			"abc\"def",
+			"\\",
+			"\\\\",
+			"\x0123abc", // trap here is if you encode '\x01' as "\\1"; it would join with the following digits: "\\123abc".
+			"\n\r\t\x7f",
+			"\\377",
+			&all_bytes,
+		];
+
+		for case in test_cases {
+			match rountrip_encode_cstring(case) {
+				Ok(enc) => {
+					assert!(
+						arg_is_safe(&enc),
+						"escaping {:?} resulted in non-safe {:?}",
+						case,
+						enc
+					)
+				}
+				Err(err) => panic!("Unexpected error while encoding C string: {}", err),
+			}
+		}
+	}
+
+	#[test]
+	fn test_resolve_addr() {
+		todo!()
+	}
+
+	#[test]
+	fn test_get_server_bindaddrs() {
+		todo!()
+	}
+
+	#[test]
+	fn test_read_auth_cookie() {
+		todo!()
+	}
+
+	#[test]
+	fn test_compute_server_hash() {
+		todo!()
+	}
+
+	#[test]
+	fn test_compute_client_hash() {
+		todo!()
+	}
+
+	#[test]
+	fn test_ext_or_send_command() {
+		todo!()
+	}
+
+	#[test]
+	fn test_ext_or_send_user_addr() {
+		todo!()
+	}
+
+	#[test]
+	fn test_ext_or_port_send_transport() {
+		todo!()
+	}
+
+	#[test]
+	fn test_ext_or_port_send_done() {
+		todo!()
+	}
+
+	#[test]
+	fn test_ext_or_port_recv_command() {
+		todo!()
+	}
+
+	#[test]
+	fn test_ext_or_port_set_metadata() {
+		todo!()
+	}
+
+	#[test]
+	fn test_ext_or_port_setup_fail_set_deadline() {
+		todo!()
+	}
 
 	#[test]
 	fn test_make_state_dir() {
@@ -258,71 +498,6 @@ mod tests {
 				PTError::IOError(::std::io::ErrorKind::NotADirectory),
 			),
 		}
-	}
-
-	#[test]
-	fn test_resolve_addr() {
-		todo!()
-	}
-
-	#[test]
-	fn test_get_server_bindaddrs() {
-		todo!()
-	}
-
-	#[test]
-	fn test_read_auth_cookie() {
-		todo!()
-	}
-
-	#[test]
-	fn test_compute_server_hash() {
-		todo!()
-	}
-
-	#[test]
-	fn test_compute_client_hash() {
-		todo!()
-	}
-
-	#[test]
-	fn test_ext_or_send_command() {
-		todo!()
-	}
-
-	#[test]
-	fn test_ext_or_send_user_addr() {
-		todo!()
-	}
-
-	#[test]
-	fn test_ext_or_port_send_transport() {
-		todo!()
-	}
-
-	#[test]
-	fn test_ext_or_port_send_done() {
-		todo!()
-	}
-
-	#[test]
-	fn test_ext_or_port_recv_command() {
-		todo!()
-	}
-
-	#[test]
-	fn test_ext_or_port_set_metadata() {
-		todo!()
-	}
-
-	#[test]
-	fn test_ext_or_port_setup_fail_set_deadline() {
-		todo!()
-	}
-
-	#[test]
-	fn test_encode_cstring() {
-		todo!()
 	}
 
 	#[test]
