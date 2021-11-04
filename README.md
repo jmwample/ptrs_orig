@@ -28,6 +28,20 @@ copyright and related and neighboring rights to this software to the
 public domain worldwide. This software is distributed without any
 warranty. See COPYING.
 
+## Dependencies
+
+* Ring
+* itertools
+* thiserror
+* url
+
+### Development & Examples
+
+* hex-literal
+* tokio
+* tempfile
+* nix
+
 ## FFI
 
 The library exposes a set of C ABI bindings, those are defined in the `ptrs_ffi.h`

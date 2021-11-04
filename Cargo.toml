@@ -11,12 +11,14 @@ edition = "2018"
 thiserror = "1.0.*"
 url = "2,2,2"
 itertools = "0.10.0"
+ring = "0.16.20"
 
 # standard crate data is left out
 [dev-dependencies]
 nix = "0.23.0"
 tempfile = "3.2.0"
 tokio = {version = "1", features=["full"] }
+hex-literal = "0.3.3"
 
 [lib]
 crate-type = ["lib", "staticlib", "dylib"]

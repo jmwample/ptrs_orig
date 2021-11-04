@@ -1,9 +1,15 @@
 //! Pluggable Transports
 
+use std::convert::TryInto;
 use std::env;
 use std::fs;
+use std::io::{BufRead, BufReader};
 use std::net::{AddrParseError, IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::os::unix::fs::DirBuilderExt;
+use std::path::Path;
+
+use ring::constant_time::verify_slices_are_equal;
+use ring::{digest, hmac};
 use url::Url;
 
 use crate::error::PTError;
@@ -228,28 +234,192 @@ fn resolve_addr(addr_str: &str) -> Result<SocketAddr, PTError> {
 	}
 }
 
+fn read_auth_cookie<T: BufRead>(mut buf: T) -> Result<[u8; 32], PTError> {
+	const AUTH_COOKIE_HEADER: &[u8] = "! Extended ORPort Auth Cookie !\x0a".as_bytes();
+	let mut header_buf = String::new();
+	let mut cookie_buf = String::new();
+	let mut extra_buf = String::new();
+
+	match buf.read_line(&mut header_buf) {
+		Ok(n) => {
+			if n != 32 {
+				return Err(PTError::ParseError(String::from(
+					"missing auth cookie header",
+				)));
+			}
+			if let Err(_e) = verify_slices_are_equal(header_buf.as_bytes(), AUTH_COOKIE_HEADER) {
+				return Err(PTError::ParseError(String::from(
+					"missing auth cookie header",
+				)));
+			}
+		}
+		Err(e) => return Err(PTError::IOError(e.kind())),
+	}
+
+	match buf.read_line(&mut cookie_buf) {
+		Ok(n) => {
+			if n > 32 {
+				return Err(PTError::ParseError(String::from(
+					"file is longer than 64 bytes",
+				)));
+			}
+			if cookie_buf.len() < 32 {
+				// cookie too short
+				return Err(PTError::ParseError(String::from("unexpected EOF")));
+			}
+		}
+		Err(e) => return Err(PTError::IOError(e.kind())),
+	}
+
+	// ensure that the file ends after the cookie
+	match buf.read_line(&mut extra_buf) {
+		Ok(n) => {
+			if n != 0 {
+				return Err(PTError::ParseError(String::from(
+					"file is longer than 64 bytes",
+				)));
+			}
+		}
+		Err(e) => return Err(PTError::IOError(e.kind())),
+	}
+
+	// should never fail given length checks
+	Ok(cookie_buf.as_bytes().try_into().unwrap())
+}
+
+// Read and validate the contents of an auth cookie file. Returns the 32-byte
+// cookie. See section 4.2.1.2 of 217-ext-orport-auth.txt.
+fn read_auth_cookie_file(fname: &Path) -> Result<[u8; 32], PTError> {
+	match fs::File::open(fname) {
+		Ok(f) => return read_auth_cookie(BufReader::new(f)),
+		Err(err) => Err(PTError::IOError(err.kind())),
+	}
+}
+
+/// See 217-ext-orport-auth.txt section 4.2.1.3.
+fn compute_server_hash(
+	auth_cookie: &[u8; digest::SHA256_OUTPUT_LEN],
+	client_nonce: &[u8],
+	server_nonce: &[u8],
+) -> [u8; digest::SHA256_OUTPUT_LEN] {
+	let s_key = hmac::Key::new(hmac::HMAC_SHA256, auth_cookie.as_ref());
+	let mut s_ctx = hmac::Context::with_key(&s_key);
+	s_ctx.update("ExtORPort authentication server-to-client hash".as_bytes());
+	s_ctx.update(client_nonce);
+	s_ctx.update(server_nonce);
+	s_ctx.sign().as_ref().try_into().unwrap()
+}
+
+/// See 217-ext-orport-auth.txt section 4.2.1.3.
+fn compute_client_hash(
+	auth_cookie: &[u8; digest::SHA256_OUTPUT_LEN],
+	client_nonce: &[u8],
+	server_nonce: &[u8],
+) -> [u8; digest::SHA256_OUTPUT_LEN] {
+	let s_key = hmac::Key::new(hmac::HMAC_SHA256, auth_cookie.as_ref());
+	let mut s_ctx = hmac::Context::with_key(&s_key);
+	s_ctx.update("ExtORPort authentication client-to-server hash".as_bytes());
+	s_ctx.update(client_nonce);
+	s_ctx.update(server_nonce);
+	s_ctx.sign().as_ref().try_into().unwrap()
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use hex_literal::hex;
 	use tempfile;
 
 	#[test]
-	fn test_get_server_bindaddrs() {
-		todo!()
-	}
-
-	#[test]
 	fn test_read_auth_cookie() {
-		todo!()
+		let good_cases =
+			vec!["! Extended ORPort Auth Cookie !\x0a0123456789ABCDEF0123456789ABCDEF"];
+		let bad_cases = vec![
+			// bad header
+			(
+				"! Impostor ORPort Auth Cookie !\x0a0123456789ABCDEF0123456789ABCDEF",
+				PTError::ParseError(String::from("missing auth cookie header")),
+			),
+			// bad header length
+			(
+				"! LongImpostor ORPort Auth Cookie !\x0a0123456789ABCDEF0123456789ABCDEF",
+				PTError::ParseError(String::from("missing auth cookie header")),
+			),
+			// too short
+			(
+				"! Extended ORPort Auth Cookie !\x0a0123456789ABCDEF0123456789ABCDE",
+				PTError::ParseError(String::from("unexpected EOF")),
+			),
+			// too long
+			(
+				"! Extended ORPort Auth Cookie !\x0a0123456789ABCDEF0123456789ABCDEFX",
+				PTError::ParseError(String::from("file is longer than 64 bytes")),
+			),
+			// too long
+			(
+				"! Extended ORPort Auth Cookie !\x0a0123456789ABCDEF0123456789ABCDEF\x0a\x0a",
+				PTError::ParseError(String::from("file is longer than 64 bytes")),
+			),
+		];
+
+		for (input, expected) in bad_cases {
+			match read_auth_cookie(input.as_bytes()) {
+				Ok(cookie) => panic!("{} unexpectedly succeeded ( → {:?})", input, cookie),
+				Err(err) => {
+					assert_eq!(err, expected, "{} → {} (expected {})", input, err, expected)
+				}
+			}
+		}
+
+		for input in good_cases {
+			match read_auth_cookie(input.as_bytes()) {
+				Ok(cookie) => {
+					assert_eq!(
+						&cookie,
+						input[32..64].as_bytes(),
+						"{} → {:?} (expected {})",
+						input,
+						cookie,
+						&input[32..64]
+					);
+				}
+				Err(err) => panic!("{} unexpectedly returned an error: {}", input, err),
+			}
+		}
 	}
 
 	#[test]
 	fn test_compute_server_hash() {
-		todo!()
+		let auth_cookie = [0u8; 32];
+		let client_nonce = [0u8; 32];
+		let server_nonce = [0u8; 32];
+		let expected: [u8; 32] =
+			hex!("9e221919982a84f75faf60ef926949796268c97833e06960ff265369a90fd6d8");
+		let hash = compute_server_hash(&auth_cookie, &client_nonce, &server_nonce);
+		assert_eq!(
+			hash, expected,
+			"\t{:02x?}\n\t{:02x?}\n\t{:02x?}\n→\t{:02x?}\n(!=\t{:02x?})",
+			auth_cookie, client_nonce, server_nonce, hash, expected
+		);
 	}
 
 	#[test]
 	fn test_compute_client_hash() {
+		let auth_cookie = [0u8; 32];
+		let client_nonce = [0u8; 32];
+		let server_nonce = [0u8; 32];
+		let expected: [u8; 32] =
+			hex!("0f368b1bee24aabc54a9114ce06c070f3ed99d0d368f599ccc6dfdc8bf457a62");
+		let hash = compute_client_hash(&auth_cookie, &client_nonce, &server_nonce);
+		assert_eq!(
+			hash, expected,
+			"\t{:02x?}\n\t{:02x?}\n\t{:02x?}\n→\t{:02x?}\n(!=\t{:02x?})",
+			auth_cookie, client_nonce, server_nonce, hash, expected
+		);
+	}
+
+	#[test]
+	fn test_get_server_bindaddrs() {
 		todo!()
 	}
 
