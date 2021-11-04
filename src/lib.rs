@@ -23,6 +23,9 @@
 //! warranty. See COPYING.
 //!
 //! ### Future Developments:
+//! - async using std
+//! - async using tokio
+//!
 //! - JNI support & examples
 //! - WASM support & example
 //! - golang shim & examples

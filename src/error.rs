@@ -19,6 +19,11 @@ pub enum PTError {
 	#[error("PARSE-ERROR {0}")]
 	ParseError(String),
 
+	/// error occurred while parsing a proxy address. Message will likely be
+	/// `invalid IP address syntax` from [`std::net::AddrParseError`].
+	#[error("ADDR-PARSE-ERROR {0:?}")]
+	AddrParseError(String),
+
 	///
 	#[error("PROXY-ERROR {0}")]
 	ProxyError(String),
