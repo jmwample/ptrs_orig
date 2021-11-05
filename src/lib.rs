@@ -39,6 +39,7 @@
 #![feature(io_error_more)]
 
 pub mod args;
+mod bindaddr;
 pub mod error;
 pub mod pt;
 mod socks;

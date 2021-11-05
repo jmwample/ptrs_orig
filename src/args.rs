@@ -37,6 +37,13 @@ impl Track for Args {
 	}
 }
 
+pub(crate) fn from_str_map(str_map: HashMap<&str, Vec<&str>>) -> Args {
+	str_map
+		.iter()
+		.map(|(k, vs)| (k.to_string(), vs.iter().map(|v| v.to_string()).collect()))
+		.collect()
+}
+
 /// Encode a name–value mapping so that it is suitable to go in the ARGS option
 /// of an SMETHOD line. The output is sorted by key. The "ARGS:" prefix is not
 /// added.
@@ -168,7 +175,7 @@ pub type Opts = HashMap<String, Args>;
 /// escaped with a backslash."
 ///
 /// Example: scramblesuit:key=banana;automata:rule=110;automata:depth=3
-fn parse_server_transport_options(s: &str) -> Result<Opts, PTError> {
+pub(crate) fn parse_server_transport_options(s: &str) -> Result<Opts, PTError> {
 	let mut opts = Opts::new();
 	if s.len() == 0 {
 		return Ok(opts);
@@ -237,12 +244,24 @@ mod tests {
 	use crate::hashmap;
 
 	#[test]
-	fn test_get_args() {
-		let args: Args = hashmap!(
-			String::from("a") => vec![],
-			String::from("b") => vec![String::from("value")],
-			String::from("c") => vec![String::from("v1"), String::from("v2"), String::from("v3")]
+	fn test_from_str_map() {
+		// let map = hashmap!("shared-secret" => vec!["a","b"], "file" => vec!["/tmp/blob"]);
+		let expected: Args = hashmap!(
+			String::from("shared-secret") => vec![String::from("a"), String::from("b")],
+			String::from("file" )=> vec![String::from("/tmp/blob")],
 		);
+		let args =
+			from_str_map(hashmap!("shared-secret" => vec!["a","b"], "file" => vec!["/tmp/blob"]));
+		assert_eq!(args, expected);
+	}
+
+	#[test]
+	fn test_get_args() {
+		let args: Args = from_str_map(hashmap!(
+			"a" => vec![],
+			"b" => vec!["value"],
+			"c" => vec!["v1", "v2", "v3"]
+		));
 
 		let empty: Args = HashMap::new();
 
@@ -276,23 +295,23 @@ mod tests {
 		assert_eq!(args, expected, "{:?} != {:?}", args, expected);
 
 		args.add("k1", "v1");
-		expected = hashmap!(
-			String::from("k1")=>vec![String::from("v1")]
-		);
+		expected = from_str_map(hashmap!(
+			"k1" => vec!["v1"]
+		));
 		assert_eq!(args, expected, "{:?} != {:?}", args, expected);
 
 		args.add("k2", "v2");
-		expected = hashmap!(
-			String::from("k1")=>vec![String::from("v1")],
-			String::from("k2") => vec![String::from("v2")]
-		);
+		expected = from_str_map(hashmap!(
+			"k1" => vec!["v1"],
+			"k2" => vec!["v2"]
+		));
 		assert_eq!(args, expected, "{:?} != {:?}", args, expected);
 
 		args.add("k1", "v3");
-		expected = hashmap!(
-			String::from("k1") => vec![String::from("v1"), String::from("v3")],
-			String::from("k2") => vec![String::from("v2")]
-		);
+		expected = from_str_map(hashmap!(
+			"k1" => vec!["v1", "v3"],
+			"k2" => vec!["v2"]
+		));
 		assert_eq!(args, expected, "{:?} != {:?}", args, expected);
 	}
 
@@ -365,12 +384,10 @@ mod tests {
 			}
 		}
 
-		for (input, exected_map) in good_cases.iter() {
-			// Convert all &str to String to keep tests readable
-			let expected: Args = exected_map
-				.iter()
-				.map(|(k, vs)| (k.to_string(), vs.iter().map(|v| v.to_string()).collect()))
-				.collect();
+		for (input, expected_map) in good_cases.iter() {
+			// Convert all &str to String to keep tests readable (expected_map
+			// is consumed by this operation).
+			let expected: Args = from_str_map(expected_map.to_owned());
 
 			match parse_client_parameters(input) {
 				Ok(args) => assert_eq!(
@@ -410,6 +427,20 @@ mod tests {
 				hashmap! {
 					"t1" => hashmap!{"k" => vec!["v1", "v3"]},
 					"t2" => hashmap!{"k" => vec!["v2"]},
+				},
+			),
+			(
+				"alpha:k1=v1,beta:k2=v2,gamma:k3=v3",
+				hashmap! {
+					"alpha" => hashmap!{"k1" => vec!["v1,beta:k2=v2,gamma:k3=v3"]},
+				},
+			),
+			(
+				"alpha:k1=v1;beta:k2=v2;gamma:k3=v3",
+				hashmap! {
+					"alpha" => hashmap!{"k1" => vec!["v1"]},
+					"beta" => hashmap!{"k2" => vec!["v2"]},
+					"gamma" => hashmap!{"k3" => vec!["v3"]},
 				},
 			),
 			(
@@ -455,16 +486,7 @@ mod tests {
 					// Convert all &str to String to keep tests readable
 					let expected_opts: Opts = expected
 						.iter()
-						.map(|(opt_key, args)| {
-							(
-								opt_key.to_string(),
-								args.iter()
-									.map(|(k, vs)| {
-										(k.to_string(), vs.iter().map(|v| v.to_string()).collect())
-									})
-									.collect(),
-							)
-						})
+						.map(|(opt_key, args)| (opt_key.to_string(), from_str_map(args.to_owned())))
 						.collect();
 					assert_eq!(
 						opts, expected_opts,
@@ -536,10 +558,7 @@ mod tests {
 		assert_eq!("", encode_smethod_args(None));
 
 		for (input_map, expected) in tests.iter() {
-			let input: Args = input_map
-				.iter()
-				.map(|(k, vs)| (k.to_string(), vs.iter().map(|v| v.to_string()).collect()))
-				.collect();
+			let input: Args = from_str_map(input_map.to_owned());
 
 			let encoded = encode_smethod_args(Some(&input));
 			assert_eq!(

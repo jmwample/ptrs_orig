@@ -213,7 +213,7 @@ fn encode_cstring(s: &str) -> String {
 	out
 }
 
-fn resolve_addr(addr_str: &str) -> Result<SocketAddr, PTError> {
+pub(crate) fn resolve_addr(addr_str: &str) -> Result<SocketAddr, PTError> {
 	let sock_addr_res: Result<SocketAddr, AddrParseError> = addr_str.parse();
 	match sock_addr_res {
 		Ok(a) => Ok(a),
@@ -331,6 +331,41 @@ mod tests {
 	use tempfile;
 
 	#[test]
+	fn test_ext_or_send_command() {
+		todo!()
+	}
+
+	#[test]
+	fn test_ext_or_send_user_addr() {
+		todo!()
+	}
+
+	#[test]
+	fn test_ext_or_port_send_transport() {
+		todo!()
+	}
+
+	#[test]
+	fn test_ext_or_port_send_done() {
+		todo!()
+	}
+
+	#[test]
+	fn test_ext_or_port_recv_command() {
+		todo!()
+	}
+
+	#[test]
+	fn test_ext_or_port_set_metadata() {
+		todo!()
+	}
+
+	#[test]
+	fn test_ext_or_port_setup_fail_set_deadline() {
+		todo!()
+	}
+
+	#[test]
 	fn test_read_auth_cookie() {
 		let good_cases =
 			vec!["! Extended ORPort Auth Cookie !\x0a0123456789ABCDEF0123456789ABCDEF"];
@@ -416,46 +451,6 @@ mod tests {
 			"\t{:02x?}\n\t{:02x?}\n\t{:02x?}\n→\t{:02x?}\n(!=\t{:02x?})",
 			auth_cookie, client_nonce, server_nonce, hash, expected
 		);
-	}
-
-	#[test]
-	fn test_get_server_bindaddrs() {
-		todo!()
-	}
-
-	#[test]
-	fn test_ext_or_send_command() {
-		todo!()
-	}
-
-	#[test]
-	fn test_ext_or_send_user_addr() {
-		todo!()
-	}
-
-	#[test]
-	fn test_ext_or_port_send_transport() {
-		todo!()
-	}
-
-	#[test]
-	fn test_ext_or_port_send_done() {
-		todo!()
-	}
-
-	#[test]
-	fn test_ext_or_port_recv_command() {
-		todo!()
-	}
-
-	#[test]
-	fn test_ext_or_port_set_metadata() {
-		todo!()
-	}
-
-	#[test]
-	fn test_ext_or_port_setup_fail_set_deadline() {
-		todo!()
 	}
 
 	#[test]
