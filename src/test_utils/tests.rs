@@ -11,11 +11,11 @@ use tokio::{
 use tracing::debug;
 
 ///
-///						 write 	 ===================>    encode   ===================>  >|
-///						 read 	 <===================    decode   <===================  <| echo
+///                       write  ===================>  encode  ===================>  >|
+///                       read   <===================  decode  <===================  <| echo
 ///
 ///        [ loop Buffer ] -> | source | -> | plaintext | -> | ciphertext | -> | echo |
-///									    pipe						        pipe
+///                                     pipe                               pipe
 ///
 #[allow(non_snake_case)]
 pub async fn duplex_end_to_end_1_MB<'a, A, B>(
@@ -68,7 +68,7 @@ where
     B: AsyncWrite + Unpin + 'a,
 {
     let _n = tokio::io::copy(&mut r, &mut w).await?;
-    w.write(&[]).await?;
+    _ = w.write(&[]).await?;
     w.flush().await?;
     w.shutdown().await?;
     debug!("echo_fn finished");
@@ -83,7 +83,7 @@ async fn write_and_close<'a, A: AsyncWrite + Unpin + 'a>(
     for _ in 0..1024 {
         n += w.write(&write_me).await?;
     }
-    w.write(&[]).await?;
+    n += w.write(&[]).await?;
     w.flush().await?;
     assert_eq!(n, 1024 * 1024);
 

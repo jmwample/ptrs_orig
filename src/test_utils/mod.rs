@@ -49,7 +49,7 @@ pub fn pipes_async() -> Result<(
     impl AsyncRead + AsyncWrite + Sized,
     impl AsyncRead + AsyncWrite + Sized,
 )> {
-    Ok(AsyncUnixStream::pair()?)
+    AsyncUnixStream::pair()
 }
 
 // // TODO: implement with something like named_pipes for windows

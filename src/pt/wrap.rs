@@ -36,7 +36,7 @@ mod test {
     use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
 
     fn wrap_read<R: AsyncRead + Unpin>(r: R) -> impl AsyncRead {
-        return r;
+        r
     }
 
     #[tokio::test]

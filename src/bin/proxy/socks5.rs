@@ -113,8 +113,8 @@ mod test {
     };
     use tokio_socks::tcp::Socks5Stream;
 
-    const ECHO_SERVER_ADDR: &'static str = "127.0.0.1:10007";
-    const SOCKS_SERVER_ADDR: &'static str = "127.0.0.1:10018";
+    const ECHO_SERVER_ADDR: &str = "127.0.0.1:10007";
+    const SOCKS_SERVER_ADDR: &str = "127.0.0.1:10018";
     const MSG: &[u8] = b"hello";
 
     pub async fn echo_server() -> Result<()> {
@@ -152,7 +152,7 @@ mod test {
             }
         });
 
-        Ok(test_connect().await?)
+        test_connect().await
     }
 
     pub async fn test_connect() -> Result<()> {
