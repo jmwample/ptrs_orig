@@ -154,27 +154,32 @@ where
 /// # Return value
 ///
 /// Returns a count of bytes copied `a` to `b`.
-pub trait Transform: BufferTransform + Named + Configurable {}
-
-pub fn duplex_from_transform<T, A, B>(transform: T) -> Result<Box<dyn Duplex<A, B>>>
+pub trait Transform<'a, R, W>: BufferTransform<'a, R, W> + Named + Configurable
 where
-    T: Transform,
-    A: AsyncRead + AsyncWrite + Unpin + ?Sized,
-    B: AsyncRead + AsyncWrite + Unpin + ?Sized,
+    R: AsyncRead + Clone + ?Sized + 'a,
+    W: AsyncWrite+ Clone + ?Sized + 'a {}
+
+pub fn duplex_from_transform<'a, T, A, B>(transform: T) -> Result<Box<dyn Duplex<A, B>>>
+where
+    A: AsyncRead + AsyncWrite + Unpin+ Clone + ?Sized + 'a,
+    B: AsyncRead + AsyncWrite + Unpin+ Clone + ?Sized + 'a,
+    T: Transform<'a, A, B> + 'a,
 {
     let _duplex: Box<dyn DuplexTransform<A, B>> =
         pt::copy::duplex_from_transform_buffer(transform)?;
     Err(Error::Other("not implemented yet".into()))
 }
 
-pub fn wrapping_from_transform<T>(_transform: T) -> Result<Box<dyn Wrapping>>
+pub fn wrapping_from_transform<'a, T, R, W>(_transform: T) -> Result<Box<dyn Wrapping>>
 where
-    T: Transform,
+    R: AsyncRead + Clone+ ?Sized + 'a,
+    W: AsyncWrite+ Clone + ?Sized + 'a,
+    T: Transform<'a,R,W>,
 {
     Err(Error::Other("not implemented yet".into()))
 }
 
-pub fn split<'s, S>(
+pub fn split_stream<'s, S>(
     s: S,
 ) -> Result<(
     Box<dyn stream::ReadHalf + 's>,
@@ -185,4 +190,38 @@ where
 {
     let (r, w) = tokio::io::split(s);
     Ok((Box::new(r), Box::new(w)))
+}
+
+pub fn split_impl<'s, S>(
+    s: S,
+) -> Result<(
+    impl AsyncRead + Unpin + Send + Sync + 's,
+    impl AsyncWrite + Unpin + Send + Sync + 's,
+)>
+where
+    S: AsyncRead + AsyncWrite + Unpin + Send + Sync + 's,
+{
+    let (r, w) = tokio::io::split(s);
+    Ok((r, w))
+}
+
+pub fn split_box<'s, S>(
+    s: S,
+) -> Result<(
+    Box<dyn AsyncRead + Unpin + Send + Sync + 's>,
+    Box<dyn AsyncWrite + Unpin + Send + Sync + 's>,
+)>
+where
+    S: AsyncRead + AsyncWrite + Unpin + Send + Sync + 's,
+{
+    let (r, w) = tokio::io::split(s);
+    Ok((Box::new(r), Box::new(w)))
+}
+
+pub fn split<'s,S>( s: S,) -> Result<(&'s mut (dyn AsyncRead + Unpin + Send + Sync + 's), &'s mut (dyn AsyncWrite + Unpin + Send + Sync + 's))>
+where
+    S: AsyncRead + AsyncWrite + Unpin + Send + Sync + 's,
+{
+    let (mut r, mut w) = tokio::io::split(s);
+    Ok((&mut r, &mut w))
 }

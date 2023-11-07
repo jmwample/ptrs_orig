@@ -163,4 +163,4 @@ In order to match the community standards, ptrs is using the dual MIT+Apache-2.0
 
 ## Contributing
 
-Contributors Issues, and Pull Requests are Welcome
+Contributors, Issues, and Pull Requests are Welcome

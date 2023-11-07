@@ -2,7 +2,7 @@
 use crate::{Configurable, Named, Result};
 use std::io::{BufReader, Read, Write};
 
-use tokio::io::{AsyncRead, AsyncReadExt, ReadHalf};
+use tokio::io::{AsyncRead, AsyncReadExt};
 
 pub const NAME: &str = "reverse";
 
@@ -27,7 +27,7 @@ impl Configurable for Reverse {
     }
 }
 
-pub async fn reverse<T: AsyncRead>(mut r: ReadHalf<T>, mut w: &mut [u8]) -> Result<usize> {
+pub async fn reverse<T: AsyncRead+Unpin>(mut r: T, mut w: &mut [u8]) -> Result<usize> {
     let mut buf = vec![0_u8; 1024];
     let nr = r.read(&mut buf).await?;
     // println!("n: {} {:?}", nr, &buf[..nr]);
@@ -56,6 +56,40 @@ pub fn reverse_sync(incoming: &mut dyn Read, outgoing: &mut dyn Write) -> Result
 #[cfg(test)]
 mod test {
     use super::*;
+
+    #[test]
+    fn traits() {
+        // ensure we get the right name
+        let reverse = Reverse::new();
+        assert_eq!(reverse.name(), NAME);
+
+        // config does nothing for this transport
+        let config = "config";
+        let reverse_n = Reverse::new().with_config(config).unwrap();
+        assert_eq!(reverse, reverse_n);
+    }
+
+    #[tokio::test]
+    async fn reverse_transform_async() -> Result<()> {
+        use tokio::io::BufReader;
+
+        let message = b"hello world";
+        let mut msg = BufReader::new(&message[..]);
+
+        let mut out = vec![0_u8; 1024];
+        let nw = reverse(&mut msg, &mut out).await?;
+
+        assert_eq!(std::str::from_utf8(&out[..nw]).unwrap(), "dlrow olleh");
+
+        let mut msg = BufReader::new(&out[..nw]);
+        let mut f = vec![0_u8; 1024];
+        let nw = reverse(&mut msg, &mut f).await?;
+
+        assert_eq!(nw, message.len());
+        assert_eq!(f[..nw], message[..nw]);
+
+        Ok(())
+    }
 
     #[cfg(unix)]
     #[test]

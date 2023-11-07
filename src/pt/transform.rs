@@ -1,72 +1,127 @@
 use std::io;
 use std::pin::Pin;
 use std::task::{Context, Poll};
+use std::marker::PhantomData;
 
 use pin_project::pin_project;
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
-pub trait BufferTransform {
-    fn poll_copy<R, W>(
+pub trait BufferTransform<'a, R, W>
+where
+    R: AsyncRead + ?Sized + 'a,
+    W: AsyncWrite + ?Sized + 'a
+{
+    fn poll_copy(
         &mut self,
         cx: &mut Context<'_>,
         reader: Pin<&mut R>,
         writer: Pin<&mut W>,
-    ) -> Poll<io::Result<u64>>
-    where
-        R: AsyncRead + ?Sized,
-        W: AsyncWrite + ?Sized;
+    ) -> Poll<io::Result<u64>>;
+
 }
 
-#[pin_project]
-pub struct ReadTransform<T, R>
+impl<'a, R, W> BufferTransform<'a, R, W> for Box<dyn BufferTransform<'a,R,W> + 'a>
 where
-    R: AsyncRead + Unpin + Send + Sync,
-    T: BufferTransform + Unpin + Send + Sync,
+    R: AsyncRead + Unpin + Send + Sync+ ?Sized + 'a,
+    W: AsyncWrite+ Unpin + Send + Sync + ?Sized + 'a
+{
+    fn poll_copy(
+        &mut self,
+        cx: &mut Context<'_>,
+        reader: Pin<&mut R>,
+        writer: Pin<&mut W>,
+    ) -> Poll<io::Result<u64>> {
+        (**self).poll_copy(cx, reader, writer)
+    }
+}
+
+impl<'a, R, W> BufferTransform<'a, Box<R>, Box<W>> for Box<dyn BufferTransform<'a,R,W> + 'a>
+where
+    R: AsyncRead + Unpin + Send + Sync+ ?Sized + 'a,
+    W: AsyncWrite+ Unpin + Send + Sync + ?Sized + 'a,
+    Box<R>: AsyncRead + Unpin + Send + Sync + 'a,
+    Box<W>: AsyncWrite+ Unpin + Send + Sync + 'a,
+{
+    fn poll_copy(
+        &mut self,
+        cx: &mut Context<'_>,
+        reader: Pin<&mut Box<R>>,
+        writer: Pin<&mut Box<W>>,
+    ) -> Poll<io::Result<u64>> {
+        self.poll_copy(cx, reader, writer)
+    }
+}
+
+impl<'a, R, W> BufferTransform<'a, &'a mut R, &'a mut W> for Box<dyn BufferTransform<'a,R,W> + 'a>
+where
+    R: AsyncRead + Unpin + Send + Sync+ ?Sized + 'a,
+    W: AsyncWrite+ Unpin + Send + Sync + ?Sized + 'a,
+{
+    fn poll_copy(
+        &mut self,
+        cx: &mut Context<'_>,
+        reader: Pin<&mut &mut R>,
+        writer: Pin<&mut &mut W>,
+    ) -> Poll<io::Result<u64>> {
+        self.poll_copy(cx, reader, writer)
+    }
+}
+
+
+#[pin_project]
+pub struct ReadTransform<'a, T, R, W>
+where
+    R: AsyncRead + Unpin + Send + Sync + 'a,
+    W: AsyncWrite + Unpin + Send + Sync + 'a,
+    T: BufferTransform<'a, R,W> + Unpin + Send + Sync + 'a,
 {
     inner: T,
     #[pin]
     r: R,
+    _phantom: PhantomData<&'a W>,
 }
 
-impl<'a, T, R> ReadTransform<T, R>
+impl<'a, T, R, W> ReadTransform<'a, T, R, W>
 where
     R: AsyncRead + Unpin + Send + Sync + 'a,
-    T: BufferTransform + Unpin + Send + Sync + 'a,
+    W: AsyncWrite + Unpin + Send + Sync + 'a,
+    T: BufferTransform<'a, R,W> + Unpin + Send + Sync + 'a,
 {
-    pub fn read_transform(r: R, inner: T) -> Box<dyn AsyncRead + Unpin + Send + Sync + 'a> {
-        Box::new(Self { inner, r })
+    pub fn new(r: R, inner: T) -> Box<dyn AsyncRead + Unpin + Send + Sync + 'a> {
+        Box::new(Self { inner, r, _phantom: PhantomData })
     }
 }
 
 #[pin_project]
-pub struct WriteTransform<T, W>
+pub struct WriteTransform<'a, T, R, W>
 where
-    W: AsyncWrite + Unpin + Send + Sync,
-    T: BufferTransform + Unpin + Send + Sync,
+    R: AsyncRead + Unpin + Send + Sync + 'a,
+    W: AsyncWrite + Unpin + Send + Sync + 'a,
+    T: BufferTransform<'a, R,W> + Unpin + Send + Sync + 'a,
 {
     inner: T,
     #[pin]
     w: W,
+    _phantom: PhantomData<&'a R>
 }
 
-impl<'a, T, W> WriteTransform<T, W>
+impl<'a, T, R, W> WriteTransform<'a, T, R, W>
 where
+    R: AsyncRead + Unpin + Send + Sync + 'a,
     W: AsyncWrite + Unpin + Send + Sync + 'a,
-    T: BufferTransform + Unpin + Send + Sync + 'a,
+    T: BufferTransform<'a, R,W> + Unpin + Send + Sync + 'a,
 {
-    pub fn write_transform(w: W, inner: T) -> Box<dyn AsyncWrite + Unpin + Send + Sync + 'a>
-    where
-        T: BufferTransform + Unpin + Send + Sync + 'a,
-        W: AsyncWrite + Unpin + Send + Sync + 'a,
+    pub fn new(w: W, inner: T) -> Box<dyn AsyncWrite + Unpin + Send + Sync + 'a>
     {
-        Box::new(Self { inner, w })
+        Box::new(Self { inner, w, _phantom: PhantomData })
     }
 }
 
-impl<T, R> AsyncRead for ReadTransform<T, R>
+impl<'a, T, R, W> AsyncRead for ReadTransform<'a, T, R, W>
 where
-    R: AsyncRead + Unpin + Send + Sync,
-    T: BufferTransform + Unpin + Send + Sync,
+    R: AsyncRead + Unpin + Send + Sync + 'a,
+    W: AsyncWrite + Unpin + Send + Sync + 'a,
+    T: BufferTransform<'a,R,W> + Unpin + Send + Sync + 'a,
 {
     fn poll_read(
         mut self: std::pin::Pin<&mut Self>,
@@ -78,10 +133,11 @@ where
     }
 }
 
-impl<T, W> AsyncWrite for WriteTransform<T, W>
+impl<'a, T, R, W> AsyncWrite for WriteTransform<'a, T, R, W>
 where
+    R: AsyncRead + Unpin + Send + Sync,
     W: AsyncWrite + Unpin + Send + Sync,
-    T: BufferTransform + Unpin + Send + Sync,
+    T: BufferTransform<'a,R,W> + Unpin + Send + Sync,
 {
     fn poll_write(
         mut self: std::pin::Pin<&mut Self>,
