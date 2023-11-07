@@ -65,12 +65,11 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::pt::wrap::*;
     use crate::test_utils::tests::duplex_end_to_end_1_MB;
+    use crate::{pt::wrap::*, test_utils::init_subscriber};
 
     use futures::try_join;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
-    use tracing_subscriber::filter::LevelFilter;
 
     #[tokio::test]
     async fn simplex_to_duplex() {
@@ -92,9 +91,7 @@ mod test {
 
     #[tokio::test]
     async fn duplex() {
-        tracing_subscriber::fmt()
-            .with_max_level(LevelFilter::ERROR) // LevelFilter::DEBUG for more verbose
-            .init();
+        init_subscriber();
 
         let (mut source, mut plaintext) = tokio::net::UnixStream::pair().unwrap();
         let (mut ciphertext, mut echo) = tokio::net::UnixStream::pair().unwrap();

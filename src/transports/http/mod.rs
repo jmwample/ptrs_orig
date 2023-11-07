@@ -82,16 +82,68 @@ where
     }
 }
 
-struct _Placeholder {}
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::pt::wrap::*;
+    use crate::test_utils::{init_subscriber, tests::duplex_end_to_end_1_MB};
 
-// #[cfg(test)]
-// mod test {
-//     use super::*;
-//     use crate::{Error, Result};
+    use futures::try_join;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-//     #[test]
-//     fn test_placeholder() -> Result<()> {
-//         let _p = _Placeholder {};
-//         Err(Error::Other("not implemented yet".into()))
-//     }
-// }
+    #[tokio::test]
+    async fn duplex() {
+        init_subscriber();
+
+        let (mut source, mut plaintext) = tokio::net::UnixStream::pair().unwrap();
+        let (mut ciphertext, mut echo) = tokio::net::UnixStream::pair().unwrap();
+
+        let (up, down) = duplex_end_to_end_1_MB(
+            &mut source,
+            &mut plaintext,
+            &mut ciphertext,
+            &mut echo,
+            Http::new(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(up, 1024 * 1024);
+        assert_eq!(down, 1024 * 1024);
+    }
+
+    ///                __              __
+    ///                |     (Sealer)    |
+    ///         write  | reader [ read ] |===============> echo
+    ///                |__             __|                  ||
+    ///         __             __                           ||
+    ///        |    (Revealer)   |                          ||
+    ///        | [ read ] reader | write <===================
+    ///        |__             __|
+    ///
+    #[tokio::test]
+    async fn wrap_transport() {
+        let (sealer, revealer) = Http::default().wrapper().unwrap();
+        let (mut client, mut server) = tokio::net::UnixStream::pair().unwrap();
+
+        let server_task = tokio::spawn(async move {
+            let (r, w) = server.split();
+            let mut wrapped_w = sealer.seal(Box::new(w));
+            let mut wrapped_r = revealer.reveal(Box::new(r));
+            tokio::io::copy(&mut wrapped_r, &mut wrapped_w)
+                .await
+                .unwrap();
+        });
+
+        let client_task = tokio::spawn(async move {
+            let (mut cr, mut cw) = client.split();
+            let nw = cw.write(&[0_u8; 1024]).await.unwrap();
+            assert_eq!(nw, 1024);
+
+            let mut buf = [0_u8; 1024];
+            let nr = cr.read(&mut buf).await.unwrap();
+            assert_eq!(nr, 1024);
+        });
+
+        try_join!(client_task, server_task).unwrap();
+    }
+}
