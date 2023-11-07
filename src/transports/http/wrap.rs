@@ -1,4 +1,4 @@
-use crate::pt::wrap::*;
+use crate::{pt::wrap::*, Result};
 use tokio::io::{AsyncRead, AsyncWrite};
 
 use super::Http;
@@ -21,23 +21,22 @@ impl Reveal for Http {
     }
 }
 
-// impl WrapTransport for Http {
-//     fn wrapper(
-//         &self,
-//     ) -> Result<(
-//         Box<dyn Seal + Unpin + Send + Sync>,
-//         Box<dyn Reveal + Unpin + Send + Sync>,
-//     )> {
-//         (Box::new(*self), Box::new(*self))
-//     }
+impl WrapTransport for Http {
+    fn wrapper(
+        &self,
+    ) -> Result<(
+        Box<dyn Seal + Unpin + Send + Sync>,
+        Box<dyn Reveal + Unpin + Send + Sync>,
+    )> {
+        Ok((Box::new(*self), Box::new(*self)))
+    }
 
-//     fn unwrapper(
-//         &self,
-//     ) -> Result<(
-//         Box<dyn Seal + Unpin + Send + Sync>,
-//         Box<dyn Reveal + Unpin + Send + Sync>,
-//     )> {
-//         (Box::new(*self), Box::new(*self))
-//     }
-
-// }
+    fn unwrapper(
+        &self,
+    ) -> Result<(
+        Box<dyn Seal + Unpin + Send + Sync>,
+        Box<dyn Reveal + Unpin + Send + Sync>,
+    )> {
+        Ok((Box::new(*self), Box::new(*self)))
+    }
+}

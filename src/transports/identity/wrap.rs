@@ -4,8 +4,6 @@ use crate::Result;
 
 use tokio::io::{AsyncRead, AsyncWrite};
 
-// TODO: change Seal to wrap an AsyncWriter
-
 impl Seal for Identity {
     fn seal<'a>(
         &self,

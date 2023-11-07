@@ -5,9 +5,21 @@ pub mod tests;
 
 use std::io::{Read, Result, Write};
 use std::os::unix::net::UnixStream;
+use std::sync::Once;
 
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::UnixStream as AsyncUnixStream;
+use tracing_subscriber::filter::LevelFilter;
+
+static SUBSCRIBER_INIT: Once = Once::new();
+
+pub fn init_subscriber() {
+    SUBSCRIBER_INIT.call_once(|| {
+        tracing_subscriber::fmt()
+            .with_max_level(LevelFilter::ERROR) // LevelFilter::DEBUG for more verbose
+            .init();
+    });
+}
 
 #[cfg(unix)]
 pub fn pipe_set() -> Result<(
