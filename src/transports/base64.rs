@@ -7,16 +7,16 @@ use crate::{
 
 use tokio::io::{AsyncRead, AsyncWrite};
 
-use base64::{engine::general_purpose, Engine as _};
+use base64::engine::general_purpose;
 
 struct Config {
     _engine_config: general_purpose::GeneralPurposeConfig,
 }
 
-const NAME: &'static str = "base64";
+const NAME: &str = "base64";
 
 pub struct Base64 {
-    engine: general_purpose::GeneralPurpose,
+    _engine: general_purpose::GeneralPurpose,
 }
 
 #[derive(Default)]
@@ -46,18 +46,18 @@ impl Named for Base64 {
 impl Default for Base64 {
     fn default() -> Self {
         Self {
-            engine: general_purpose::STANDARD_NO_PAD,
+            _engine: general_purpose::STANDARD_NO_PAD,
         }
     }
 }
 
 impl Base64Builder {
     fn build_seal(&self) -> Result<Box<dyn Seal + Unpin + Send + Sync>> {
-        Ok(Box::new(Base64::default()))
+        Ok(Box::<Base64>::default())
     }
 
     fn build_reveal(&self) -> Result<Box<dyn Reveal + Unpin + Send + Sync>> {
-        Ok(Box::new(Base64::default()))
+        Ok(Box::<Base64>::default())
     }
 }
 

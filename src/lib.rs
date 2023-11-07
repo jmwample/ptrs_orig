@@ -120,13 +120,6 @@ pub trait Wrapping: WrapTransport + Named + Configurable {}
 /// # Return value
 ///
 /// Returns a count of bytes copied `a` to `b`.
-// pub async fn transform_unidirectional<A, B>(a: &mut A, b: &mut B) -> Result<u64>
-// where
-//     A: AsyncRead + AsyncWrite + Unpin + ?Sized,
-//     B: AsyncRead + AsyncWrite + Unpin + ?Sized,
-// {
-//     Err(std::io::Error::new(std::io::ErrorKind::Other, "not implemented yet").into())
-// }
 pub trait Duplex<A, B>: DuplexTransform<A, B> + Named + Configurable
 where
     A: AsyncRead + AsyncWrite + Unpin + ?Sized,
@@ -161,13 +154,6 @@ where
 /// # Return value
 ///
 /// Returns a count of bytes copied `a` to `b`.
-// pub async fn transform_unidirectional<A, B>(a: &mut A, b: &mut B) -> Result<u64>
-// where
-//     A: AsyncRead + AsyncWrite + Unpin + ?Sized,
-//     B: AsyncRead + AsyncWrite + Unpin + ?Sized,
-// {
-//     Err(std::io::Error::new(std::io::ErrorKind::Other, "not implemented yet").into())
-// }
 pub trait Transform: BufferTransform + Named + Configurable {}
 
 pub fn duplex_from_transform<T, A, B>(transform: T) -> Result<Box<dyn Duplex<A, B>>>

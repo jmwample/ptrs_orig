@@ -120,7 +120,7 @@ where
 }
 
 pub(crate) fn duplex_from_transform_buffer<T, A, B>(
-    transform: T,
+    _transform: T,
 ) -> Result<Box<dyn DuplexTransform<A, B>>>
 where
     A: AsyncRead + AsyncWrite + Unpin + ?Sized,

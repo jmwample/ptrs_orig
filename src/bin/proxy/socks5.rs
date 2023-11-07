@@ -5,7 +5,7 @@ use tokio::{
     net::TcpStream,
 };
 
-pub async fn handle(conn: IncomingConnection<(), NeedAuthenticate>) -> Result<(), Error> {
+pub async fn _handle(conn: IncomingConnection<(), NeedAuthenticate>) -> Result<(), Error> {
     let conn = match conn.authenticate().await {
         Ok((conn, _)) => conn,
         Err((err, mut conn)) => {
@@ -144,7 +144,7 @@ mod test {
         runtime().lock().unwrap().spawn(async move {
             while let Ok((conn, _)) = server.accept().await {
                 tokio::spawn(async move {
-                    match handle(conn).await {
+                    match _handle(conn).await {
                         Ok(()) => {}
                         Err(err) => eprintln!("{err}"),
                     }

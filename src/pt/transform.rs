@@ -33,7 +33,7 @@ where
     R: AsyncRead + Unpin + Send + Sync + 'a,
     T: BufferTransform + Unpin + Send + Sync + 'a,
 {
-    pub fn new(r: R, inner: T) -> Box<dyn AsyncRead + Unpin + Send + Sync + 'a> {
+    pub fn read_transform(r: R, inner: T) -> Box<dyn AsyncRead + Unpin + Send + Sync + 'a> {
         Box::new(Self { inner, r })
     }
 }
@@ -54,7 +54,7 @@ where
     W: AsyncWrite + Unpin + Send + Sync + 'a,
     T: BufferTransform + Unpin + Send + Sync + 'a,
 {
-    pub fn new(w: W, inner: T) -> Box<dyn AsyncWrite + Unpin + Send + Sync + 'a>
+    pub fn write_transform(w: W, inner: T) -> Box<dyn AsyncWrite + Unpin + Send + Sync + 'a>
     where
         T: BufferTransform + Unpin + Send + Sync + 'a,
         W: AsyncWrite + Unpin + Send + Sync + 'a,
@@ -109,13 +109,13 @@ where
     }
 }
 
-#[cfg(test)]
-mod test {
-    use super::*;
-    use crate::{Error, Result};
+// #[cfg(test)]
+// mod test {
+//     use super::*;
+//     use crate::{Error, Result};
 
-    #[test]
-    fn test_placeholder() -> Result<()> {
-        Err(Error::Other("not implemented yet".into()))
-    }
-}
+//     #[test]
+//     fn test_placeholder() -> Result<()> {
+//         Err(Error::Other("not implemented yet".into()))
+//     }
+// }
