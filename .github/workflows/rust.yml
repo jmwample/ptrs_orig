@@ -32,11 +32,9 @@ jobs:
     - uses: actions/checkout@v3
 
     - name: Install Rust
-      uses: actions-rs/toolchain@v1
+      uses: dtolnay/rust-toolchain@nightly
       with:
-        profile: minimal
-        toolchain: nightly
-        override: true
+        components: clippy, rustfmt
 
     - name: Install clippy
       run: rustup component add clippy --toolchain nightly
@@ -59,11 +57,7 @@ jobs:
     - uses: actions/checkout@v3
 
     - name: Install Rust
-      uses: actions-rs/toolchain@v1
-      with:
-        profile: minimal
-        toolchain: nightly
-        override: true
+      uses: dtolnay/rust-toolchain@nightly
 
     # Build ptrs library
     - name: Build library
