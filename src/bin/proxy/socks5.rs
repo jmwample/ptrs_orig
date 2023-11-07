@@ -5,7 +5,7 @@ use tokio::{
     net::TcpStream,
 };
 
-pub async fn handle(conn: IncomingConnection<(), NeedAuthenticate>) -> Result<(), Error> {
+pub async fn _handle(conn: IncomingConnection<(), NeedAuthenticate>) -> Result<(), Error> {
     let conn = match conn.authenticate().await {
         Ok((conn, _)) => conn,
         Err((err, mut conn)) => {
@@ -113,8 +113,8 @@ mod test {
     };
     use tokio_socks::tcp::Socks5Stream;
 
-    const ECHO_SERVER_ADDR: &'static str = "127.0.0.1:10007";
-    const SOCKS_SERVER_ADDR: &'static str = "127.0.0.1:10018";
+    const ECHO_SERVER_ADDR: &str = "127.0.0.1:10007";
+    const SOCKS_SERVER_ADDR: &str = "127.0.0.1:10018";
     const MSG: &[u8] = b"hello";
 
     pub async fn echo_server() -> Result<()> {
@@ -144,7 +144,7 @@ mod test {
         runtime().lock().unwrap().spawn(async move {
             while let Ok((conn, _)) = server.accept().await {
                 tokio::spawn(async move {
-                    match handle(conn).await {
+                    match _handle(conn).await {
                         Ok(()) => {}
                         Err(err) => eprintln!("{err}"),
                     }
@@ -152,7 +152,7 @@ mod test {
             }
         });
 
-        Ok(test_connect().await?)
+        test_connect().await
     }
 
     pub async fn test_connect() -> Result<()> {

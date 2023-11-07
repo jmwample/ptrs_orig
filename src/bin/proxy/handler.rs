@@ -3,15 +3,13 @@ use ptrs::{Error, Result};
 
 use std::str::FromStr;
 
-use super::socks5::handle;
-use socks5_server::{auth::NoAuth, Server};
 use tokio::{
     self,
-    io::{copy, AsyncRead, AsyncWrite},
+    io::copy,
     net::{TcpListener, TcpStream},
 };
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, trace};
+use tracing::debug;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Handler {

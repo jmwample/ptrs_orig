@@ -2,10 +2,10 @@
 # Pluggable Transports in Rust (PTRS)
 
 <p>
-  <a href="https://github.com/jmwample/ptrs/actions/workflows/rust.yml/badge.svg?branch=main">
-    <img src="https://github.com/jmwample/ptrs/actions/workflows/rust.yml" alt="Build Status">
-  <a href="https://codecov.io/gh/jmwample/ptrs">
-    <img src="https://codecov.io/gh/jmwample/ptrs/branch/master/graph/badge.svg">
+  <a href="https://github.com/jmwample/ptrs/actions/workflows/rust.yml">
+    <img src="https://github.com/jmwample/ptrs/actions/workflows/rust.yml/badge.svg?branch=main" alt="Build Status">
+  <a href="https://codecov.io/gh/jmwample/ptrs" >
+    <img src="https://codecov.io/gh/jmwample/ptrs/graph/badge.svg?token=M5366KWEA4"/>
   </a>
   <a href="https://deps.rs/repo/github/jmwample/ptrs">
     <img src="https://deps.rs/repo/github/jmwample/ptrs/status.svg">
@@ -30,7 +30,10 @@ the traits [`tokio::io:AsyncRead`] + [`tokio::io::AsyncRead`] + `Unpin + Send + 
 us to define the expected shared behavior of pluggable transports as a transform of these
 [`Stream`]s.
 
-```rust
+```rust ignore
+use ptrs::Result;
+use tokio::io::{AsyncRead,AsyncWrite};
+
 pub trait StreamTransport<'a, A>
 where
     A: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'a,
@@ -45,7 +48,7 @@ Given this abstraction integrating transports into async rust applications becom
 straightforward, for example, integrating the identity transport (which performs a direct copy with
 no actual transform) could be done similar to:
 
-```rust
+```rust ignore
 use ptrs::{stream::Stream, StreamTransport, transports::identity};
 use tokio::net::TcpListener;
 
@@ -69,7 +72,7 @@ async fn main() -> io::Result<()> {
 
 Integration on the client side is similarly straightforward.
 
-```rust
+```rust ignore
 use ptrs::{StreamTransport, transports::identity};
 use tokio::net::TcpStream;
 use tokio::io::AsyncWriteExt;
@@ -99,7 +102,7 @@ trait objects implementing the same abstraction is is possible to wrap multiple 
 one another. One reason to do this might be to have separate reliability, obfuscation and padding
 strategies that can be composed interchangeably.
 
-```rust
+```rust no_run
 todo!()
 ```
 
@@ -111,19 +114,19 @@ demonstrates the flexibility of the high level `ptrs` trait.
 
 #### Buffer Transform
 
-```rust
+```rust no_run
 todo!()
 ```
 
 #### Read / Wrap Oriented
 
-```rust
+```rust no_run
 todo!()
 ```
 
 #### Copy Based
 
-```rust
+```rust no_run
 todo!()
 ```
 

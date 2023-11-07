@@ -28,9 +28,9 @@ where
 }
 
 ///
-///						 write 	 =================>    encode   =================>   decode
+///                       write  =================>    encode   =================>   decode
 ///        [ loop Buffer ] -> | source | -> | encoding | -> | encoded | -> | decoding | -> | /dev/null |
-///									    pipe						   pipe
+///                                     pipe                           pipe
 ///
 #[cfg(test)]
 mod test {

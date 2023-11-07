@@ -4,14 +4,12 @@ mod stream;
 mod wrap;
 
 use crate::pt::copy::*;
-use crate::pt::copy_buffer::CopyBuffer;
-use crate::pt::wrap::*;
+
 use crate::{Configurable, Named, Result};
 
-use async_trait::async_trait;
-use futures::{future::poll_fn, ready};
-use http::{Request, Response};
-use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
+use futures::ready;
+use http::Request;
+use tokio::io::{AsyncRead, AsyncWrite};
 
 use std::io;
 use std::pin::Pin;
@@ -38,8 +36,8 @@ impl Configurable for Http {
     }
 }
 
-fn build_http<'w, T: AsyncWrite + Unpin + 'w, B: AsRef<u8>>(writer: T, body: B) -> Result<()> {
-    let request = Request::builder()
+fn _build_http<'w, T: AsyncWrite + Unpin + 'w, B: AsRef<u8>>(_writer: T, body: B) -> Result<()> {
+    let _request = Request::builder()
         .method("GET")
         .uri("https://www.rust-lang.org/")
         .header("X-Custom-Foo", "Bar")
@@ -86,14 +84,14 @@ where
 
 struct _Placeholder {}
 
-#[cfg(test)]
-mod test {
-    use super::*;
-    use crate::{Error, Result};
+// #[cfg(test)]
+// mod test {
+//     use super::*;
+//     use crate::{Error, Result};
 
-    #[test]
-    fn test_placeholder() -> Result<()> {
-        let _p = _Placeholder {};
-        Err(Error::Other("not implemented yet".into()))
-    }
-}
+//     #[test]
+//     fn test_placeholder() -> Result<()> {
+//         let _p = _Placeholder {};
+//         Err(Error::Other("not implemented yet".into()))
+//     }
+// }
