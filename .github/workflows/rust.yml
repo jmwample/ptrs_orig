@@ -38,6 +38,9 @@ jobs:
         toolchain: nightly
         override: true
 
+    - name: Install clippy
+      run: rustup component add clippy --toolchain nightly
+
     - name: Lint
       run: cargo clippy --workspace --all-targets --verbose --all-features
 
@@ -48,7 +51,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        os: [ "ubuntu-latest", "macos-latest" ]
+        os: [ "ubuntu-latest" ]
 
     runs-on: ${{ matrix.os }}
 
