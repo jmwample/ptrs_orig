@@ -152,19 +152,6 @@ impl ExitConfig {
             tokio::spawn(handler.handle(stream, close_c));
         }
     }
-
-    pub async fn run_listener(
-        self,
-        close: CancellationToken,
-        _wait: Sender<()>,
-    ) -> Result<(), anyhow::Error> {
-        let listener = TcpListener::bind(self.listen_address).await.unwrap();
-        info!("started server listening on {}", self.listen_address);
-        self.handler
-            .handle_listener(listener, close.clone())
-            .await
-            .map_err(|e| anyhow!("error ocurred while handling connections: {:?}", e))
-    }
 }
 
 impl Default for ExitConfig {
