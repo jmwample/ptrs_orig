@@ -178,12 +178,59 @@ where
 }
 
 // #[cfg(test)]
-// mod test {
+// mod tests {
 //     use super::*;
-//     use crate::{Error, Result};
+//     use futures::executor::block_on;
+//     use tokio::io::AsyncReadExt;
+
+//     struct ExampleTransform {}
+
+//     impl<'a,R,W> BufferTransform<'a,R,W> for ExampleTransform
+//     where
+//         R: AsyncRead + Unpin + Send + Sync + ?Sized + 'a,
+//         W: AsyncWrite + Unpin + Send + Sync + ?Sized + 'a,
+//     {
+//         fn poll_copy(
+//             &mut self,
+//             cx: &mut Context<'_>,
+//             reader: Pin<&mut R>,
+//             writer: Pin<&mut W>,
+//         ) -> Poll<io::Result<u64>> {
+//             let b = [0; 1024];
+//             let mut buf = ReadBuf::new(&mut b);
+//             let mut total = 0;
+//             loop {
+//                 let n = match reader.poll_read(cx, &mut buf) {
+//                     Poll::Ready(Ok(_)) => buf.filled().len(),
+//                     Poll::Ready(Err(e)) => return Poll::Ready(Err(e)),
+//                     Poll::Pending => return Poll::Ready(Ok(total)),
+//                 };
+//                 if n == 0 {
+//                     return Poll::Ready(Ok(total));
+//                 }
+//                 total += n as u64;
+//                 match writer.poll_write(cx, &b[..n]) {
+//                     Poll::Ready(Ok(_)) => {}
+//                     Poll::Ready(Err(e)) => return Poll::Ready(Err(e)),
+//                     Poll::Pending => return Poll::Ready(Ok(total)),
+//                 }
+//             }
+//         }
+//     }
 
 //     #[test]
-//     fn test_placeholder() -> Result<()> {
-//         Err(Error::Other("not implemented yet".into()))
+//     fn test_read_transform() {
+//         // Create a buffer transform that just copies data from the input to the output.
+//         let transform = ExampleTransform {};
+
+//         // Create a reader that reads from a cursor.
+//         let input = &b"hello world";
+//         let (mut client, mut server) = tokio::io::duplex(64);
+//         let reader = ReadTransform::new(client, transform);
+
+//         // Read the data from the reader and check that it matches the input.
+//         let mut buf = [0; 11];
+//         block_on(reader.read_exact(&mut buf)).unwrap();
+//         assert_eq!(&buf, b"hello world");
 //     }
 // }

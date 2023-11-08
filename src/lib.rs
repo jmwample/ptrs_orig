@@ -249,3 +249,58 @@ where
     let (r, w) = tokio::io::split(s);
     Ok((Box::new(r), Box::new(w)))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::net::UnixStream;
+
+    #[tokio::test]
+    async fn splits() -> Result<()> {
+        let (client, server) = UnixStream::pair()?;
+
+        let (mut cr1, mut cw1) = split_stream(client)?;
+        let (mut sr1, mut sw1) = split_stream(server)?;
+        test_split_read_write(&mut cr1, &mut cw1, &mut sr1, &mut sw1).await?;
+
+        let (client, server) = UnixStream::pair()?;
+        let (mut cr2, mut cw2) = split_impl(client)?;
+        let (mut sr2, mut sw2) = split_impl(server)?;
+        test_split_read_write(&mut cr2, &mut cw2, &mut sr2, &mut sw2).await?;
+
+        let (client, server) = UnixStream::pair()?;
+        let (mut cr3, mut cw3) = split_box(client)?;
+        let (mut sr3, mut sw3) = split_box(server)?;
+        test_split_read_write(&mut cr3, &mut cw3, &mut sr3, &mut sw3).await?;
+        Ok(())
+    }
+
+    async fn test_split_read_write<'a, R1, W1, R2, W2>(
+        mut cr: R1,
+        mut cw: W1,
+        mut sr: R2,
+        mut sw: W2,
+    ) -> Result<()>
+    where
+        R1: AsyncRead + Unpin + Send + Sync + 'a,
+        W1: AsyncWrite + Unpin + Send + Sync + 'a,
+        R2: AsyncRead + Unpin + Send + Sync + 'a,
+        W2: AsyncWrite + Unpin + Send + Sync + 'a,
+    {
+        let message = "hello world";
+
+        cw.write_all(message.as_bytes()).await?;
+        let mut buf = [0; 11];
+        sr.read_exact(&mut buf).await?;
+        assert_eq!(buf, message.as_bytes());
+
+        let message = "goodbye";
+        sw.write_all(message.as_bytes()).await?;
+        let mut buf = [0; 7];
+        cr.read_exact(&mut buf).await?;
+        assert_eq!(buf, message.as_bytes());
+
+        Ok(())
+    }
+}
