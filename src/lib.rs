@@ -39,7 +39,7 @@ pub enum Role {
 }
 
 pub trait TransportBuilder: Named + Configurable {
-    fn build(&self, r: Role) -> Result<Box<dyn for<'a> Transport<'a, &'a mut dyn Stream>>>;
+    fn build(&self, r: &Role) -> Result<TransportInstance>;
 }
 
 /// Copies data in both directions between `a` and `b`, encoding/decoding as it goes.
@@ -74,6 +74,24 @@ where
     A: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'a,
 {
     fn wrap(&self, a: A) -> Result<Box<dyn Stream + 'a>>;
+}
+
+pub struct TransportInstance {
+    inner: Box<dyn for<'a> Transport<'a, Box<dyn Stream + 'a>> + Send + Sync>,
+}
+impl TransportInstance {
+    fn new(inner: Box<dyn for<'a> Transport<'a, Box<dyn Stream + 'a>> + Send + Sync>) -> Self {
+        Self { inner }
+    }
+}
+
+impl<'a, A> Transport<'a, A> for TransportInstance
+where
+    A: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'a,
+{
+    fn wrap(&self, a: A) -> Result<Box<dyn Stream + 'a>> {
+        self.inner.wrap(Box::new(a))
+    }
 }
 
 /// Copies data in both directions between `a` and `b`, encoding/decoding as it goes.

@@ -5,8 +5,8 @@ use std::str::FromStr;
 
 use tokio::{
     self,
-    io::copy,
-    net::{TcpListener, TcpStream},
+    io::{copy, split, AsyncRead, AsyncWrite},
+    net::TcpListener,
 };
 use tokio_util::sync::CancellationToken;
 use tracing::debug;
@@ -29,9 +29,9 @@ impl Handler {
         }
     }
 
-    pub async fn handle(self, stream: TcpStream, close_c: CancellationToken) -> Result<()>
-// where
-        // RW: Split + AsyncRead + AsyncWrite + Unpin + Send + 'static,
+    pub async fn handle<RW>(self, stream: RW, close_c: CancellationToken) -> Result<()>
+    where
+        RW: AsyncRead + AsyncWrite + Unpin + Send + 'static,
     {
         match self {
             // Handler::Socks5(h) => h.handle(stream, close_c).await,
@@ -133,11 +133,11 @@ impl EchoHandler {
         Ok(())
     }
 
-    async fn handle(&self, mut stream: TcpStream, close_c: CancellationToken) -> Result<()>
-// where
-    //     RW: Split<'a> + AsyncRead + AsyncWrite + Unpin + Send + 'a,
+    async fn handle<'a, RW>(&self, stream: RW, close_c: CancellationToken) -> Result<()>
+    where
+        RW: AsyncRead + AsyncWrite + Unpin + Send + 'a,
     {
-        let (mut reader, mut writer) = stream.split();
+        let (mut reader, mut writer) = split(stream);
         tokio::select! {
             _ = copy(&mut reader, &mut writer) => {}
             _ = close_c.cancelled() => {}

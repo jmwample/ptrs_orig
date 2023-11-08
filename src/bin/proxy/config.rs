@@ -1,11 +1,15 @@
-use crate::handler::{EchoHandler, Handler};
-use ptrs::{stream::Stream, Role, TransportBuilder};
+use crate::{
+    handler::{EchoHandler, Handler},
+    pt::get_transport,
+};
+use ptrs::{Role, Transport, TransportBuilder};
 
 use std::{convert::TryFrom, default::Default, net, str::FromStr};
 
+use anyhow::anyhow;
 use clap::{Args, CommandFactory, Parser, Subcommand};
 use tokio::{
-    io::{copy_bidirectional, AsyncRead, AsyncWrite},
+    io::copy_bidirectional,
     net::{TcpListener, TcpStream},
     sync::mpsc::Sender,
 };
@@ -55,15 +59,30 @@ impl EntranceConfig {
     ) -> Result<(), anyhow::Error> {
         let listener = TcpListener::bind(self.listen_address).await.unwrap();
         info!("started proxy client on {}", self.listen_address);
+
+        let builder = self.builder.as_ref().unwrap();
+
         loop {
-            let (mut in_stream, socket_addr) = listener.accept().await?;
+            let (in_stream, socket_addr) = listener.accept().await?;
 
             let mut out_stream = TcpStream::connect(self.remote_address)
                 .await
-                .map_err(|e| anyhow::anyhow!("failed to connect to remote: {}", e))?;
+                .map_err(|e| anyhow!("failed to connect to remote: {}", e))?;
+
+            let transport = builder
+                .build(&self.role)
+                .map_err(|e| anyhow!("failed to build transport: {:?}", e))?;
 
             let close_c = close.clone();
             tokio::spawn(async move {
+                let mut in_stream = match transport.wrap(Box::new(in_stream)) {
+                    Ok(s) => s,
+                    Err(e) => {
+                        debug!("failed to wrap in_stream ->({socket_addr}): {:?}", e);
+                        return;
+                    }
+                };
+
                 debug!("new connection {socket_addr}");
                 tokio::select! {
                     _ = copy_bidirectional(&mut in_stream, &mut out_stream) => {}
@@ -111,11 +130,25 @@ impl ExitConfig {
     ) -> Result<(), anyhow::Error> {
         let listener = TcpListener::bind(self.listen_address).await.unwrap();
         info!("started server listening on {}", self.listen_address);
+
+        let builder = self.builder.as_ref().unwrap();
+
         loop {
             let (stream, socket_addr) = listener.accept().await?;
-            debug!("new connection {socket_addr}");
+            debug!("new tcp connection {socket_addr}");
+
+            let transport = builder
+                .build(&self.role)
+                .map_err(|e| anyhow!("failed to build transport: {:?}", e))?;
             let close_c = close.clone();
             let handler = self.handler;
+            let stream = match transport.wrap(Box::new(stream)) {
+                Ok(s) => s,
+                Err(e) => {
+                    debug!("failed to wrap in_stream ->({socket_addr}): {:?}", e);
+                    continue;
+                }
+            };
             tokio::spawn(handler.handle(stream, close_c));
         }
     }
@@ -130,7 +163,7 @@ impl ExitConfig {
         self.handler
             .handle_listener(listener, close.clone())
             .await
-            .map_err(|e| anyhow::anyhow!("error ocurred while handling connections: {:?}", e))
+            .map_err(|e| anyhow!("error ocurred while handling connections: {:?}", e))
     }
 }
 
@@ -167,11 +200,14 @@ impl TryFrom<Cli> for ProxyConfig {
 
                 config.pt = "".to_string();
                 config.pt_args = vec![];
+                let builder = get_transport(&config.pt, &config.role)
+                    .map_err(|e| anyhow!("failed to get transport: {:?}", e))?;
+                config.builder = Some(builder);
 
                 config.listen_address = args.listen_addr.parse()?;
 
                 config.handler = Handler::from_str(&args.backend)
-                    .map_err(|e| anyhow::anyhow!("failed to parse backend: {:?}", e))?;
+                    .map_err(|e| anyhow!("failed to parse backend: {:?}", e))?;
 
                 Ok(ProxyConfig::Exit(config))
             }
@@ -192,6 +228,9 @@ impl TryFrom<Cli> for ProxyConfig {
 
                 config.pt = "".to_string();
                 config.pt_args = vec![];
+                let builder = get_transport(&config.pt, &config.role)
+                    .map_err(|e| anyhow!("failed to get transport: {:?}", e))?;
+                config.builder = Some(builder);
 
                 Ok(ProxyConfig::Entrance(config))
             }

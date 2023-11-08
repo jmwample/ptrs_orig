@@ -1,5 +1,7 @@
 use crate::pt::copy::*;
-use crate::{Configurable, Named, Result, Role, Stream, Transport, TransportBuilder};
+use crate::{
+    Configurable, Named, Result, Role, Stream, Transport, TransportBuilder, TransportInstance,
+};
 
 use futures::ready;
 use tokio::io::{AsyncRead, AsyncWrite};
@@ -16,8 +18,8 @@ mod wrap;
 pub struct Identity {}
 
 impl TransportBuilder for Identity {
-    fn build(&self, _r: Role) -> Result<Box<dyn for<'a> Transport<'a, &'a mut dyn Stream>>> {
-        Ok(Box::new(Identity::new()))
+    fn build(&self, _r: &Role) -> Result<TransportInstance> {
+        Ok(TransportInstance::new(Box::new(Identity::new())))
     }
 }
 

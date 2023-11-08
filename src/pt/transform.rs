@@ -85,12 +85,16 @@ where
     W: AsyncWrite + Unpin + Send + Sync + 'a,
     T: BufferTransform<'a, R, W> + Unpin + Send + Sync + 'a,
 {
-    pub fn new(r: R, inner: T) -> Box<dyn AsyncRead + Unpin + Send + Sync + 'a> {
-        Box::new(Self {
+    pub fn new(r: R, inner: T) -> Self {
+        Self {
             inner,
             r,
             _phantom: PhantomData,
-        })
+        }
+    }
+
+    pub fn as_reader(self) -> Box<dyn AsyncRead + Unpin + Send + Sync + 'a> {
+        Box::new(self)
     }
 }
 
@@ -113,12 +117,15 @@ where
     W: AsyncWrite + Unpin + Send + Sync + 'a,
     T: BufferTransform<'a, R, W> + Unpin + Send + Sync + 'a,
 {
-    pub fn new(w: W, inner: T) -> Box<dyn AsyncWrite + Unpin + Send + Sync + 'a> {
-        Box::new(Self {
+    pub fn new(w: W, inner: T) -> Self {
+        Self {
             inner,
             w,
             _phantom: PhantomData,
-        })
+        }
+    }
+    pub fn as_writer(self) -> Box<dyn AsyncWrite + Unpin + Send + Sync + 'a> {
+        Box::new(self)
     }
 }
 

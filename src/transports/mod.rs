@@ -8,11 +8,12 @@ pub mod ss_format;
 
 pub mod identity;
 
-use std::str::FromStr;
-
 use crate::{pt::wrap::WrapTransport, stream::Stream, Error, Result, Transport};
+use base64::Base64Builder;
 
 use tokio::io::{AsyncRead, AsyncWrite};
+
+use std::str::FromStr;
 
 pub enum Transports {
     Identity,
@@ -50,7 +51,7 @@ impl Transports {
             Transports::Identity => Box::new(identity::Identity::new()),
             Transports::Reverse => Box::new(reverse::Reverse::new()),
             Transports::Base64 => {
-                let wt: Box<dyn WrapTransport> = Box::new(base64::Base64Builder::default());
+                let wt: Box<dyn WrapTransport> = Box::<Base64Builder>::default();
                 Box::new(wt)
             } // Transports::HexEncoder => Box::new(hex_encoder::HexEncoder::new()),
         }
