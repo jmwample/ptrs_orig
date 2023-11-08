@@ -2,11 +2,7 @@
 
 use crate::sync::constructions::stream::StreamHandler;
 use crate::Result;
-use crate::{
-    // transports::{AsTransport, Transport},
-    Configurable,
-    Named,
-};
+use crate::{Configurable, Named};
 
 use hex::{decode_to_slice, encode_to_slice, encode_upper};
 

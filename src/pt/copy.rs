@@ -128,6 +128,7 @@ where
 {
     Err(Error::Other("Not implemented yet".into()))
 }
+
 #[cfg(test)]
 mod test {
     use super::*;

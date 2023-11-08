@@ -1,5 +1,8 @@
 use crate::pt::copy::*;
-use crate::{Configurable, Named, Result};
+use crate::{
+    Configurable, Named, Result, Role, Stream, Transport, TransportBuilder, TransportInstance,
+};
+
 use futures::ready;
 use tokio::io::{AsyncRead, AsyncWrite};
 
@@ -9,11 +12,16 @@ use std::task::{Context, Poll};
 
 mod duplex;
 mod simplex;
-mod stream;
 mod wrap;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Identity {}
+
+impl TransportBuilder for Identity {
+    fn build(&self, _r: &Role) -> Result<TransportInstance> {
+        Ok(TransportInstance::new(Box::new(Identity::new())))
+    }
+}
 
 impl Identity {
     pub fn new() -> Self {
@@ -30,6 +38,15 @@ impl Named for Identity {
 impl Configurable for Identity {
     fn with_config(self, _config: &str) -> Result<Self> {
         Ok(self)
+    }
+}
+
+impl<'a, A> Transport<'a, A> for Identity
+where
+    A: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'a,
+{
+    fn wrap(&self, a: A) -> Result<Box<dyn Stream + 'a>> {
+        Ok(Box::new(a))
     }
 }
 

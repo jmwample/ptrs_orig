@@ -1,6 +1,4 @@
 use crate::{
-    pt::stream::StreamTransport,
-    stream::Stream,
     wrap::{Reveal, Seal, WrapTransport},
     Configurable, Named, Result,
 };
@@ -93,31 +91,13 @@ impl Seal for Base64 {
         r
     }
 }
+
 impl Reveal for Base64 {
     fn reveal<'a>(
         &self,
         r: Box<dyn AsyncRead + Unpin + Send + Sync + 'a>,
     ) -> Box<dyn AsyncRead + Unpin + Send + Sync + 'a> {
         r
-    }
-}
-
-// impl AsyncRead for Base64 {
-//     fn poll_read(
-//         self: std::pin::Pin<&mut Self>,
-//         cx: &mut std::task::Context<'_>,
-//         buf: &mut tokio::io::ReadBuf<'_>,
-//     ) -> std::task::Poll<std::io::Result<()>> {
-//         self.r.poll_read(cx, buf)
-//     }
-// }
-
-impl<'a, A> StreamTransport<'a, A> for Base64
-where
-    A: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'a,
-{
-    fn wrap(&self, a: A) -> Result<Box<dyn Stream + 'a>> {
-        Ok(Box::new(a))
     }
 }
 
