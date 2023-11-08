@@ -9,6 +9,7 @@ pub enum Error {
     Other(Box<dyn std::error::Error>),
     IOError(std::io::Error),
     EncodeError(Box<dyn std::error::Error>),
+    NullTransport,
 }
 
 unsafe impl Send for Error {}

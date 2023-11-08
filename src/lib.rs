@@ -12,9 +12,8 @@ pub mod transports;
 
 mod pt;
 pub use pt::*;
-use pt::{
-    copy::DuplexTransform, stream::StreamTransport, transform::BufferTransform, wrap::WrapTransport,
-};
+pub use pt::{copy::DuplexTransform, transform::BufferTransform, wrap::WrapTransport};
+pub use stream::Stream;
 
 #[cfg(test)]
 pub(crate) mod test_utils;
@@ -29,6 +28,18 @@ pub trait Configurable {
     fn with_config(self, args: &str) -> Result<Self>
     where
         Self: Sized;
+}
+
+pub enum Role {
+    /// Plaintext -> Ciphertext transformation
+    Sealer,
+
+    /// Ciphertext -> Plaintext transformation
+    Revealer,
+}
+
+pub trait TransportBuilder: Named + Configurable {
+    fn build(&self, r: Role) -> Result<Box<dyn for<'a> Transport<'a, &'a mut dyn Stream>>>;
 }
 
 /// Copies data in both directions between `a` and `b`, encoding/decoding as it goes.
@@ -58,10 +69,11 @@ pub trait Configurable {
 /// # Return value
 ///
 /// Returns a tuple of bytes copied `a` to `b` and bytes copied `b` to `a`.
-pub trait Transport<'a, A>: StreamTransport<'a, A> + Named + Configurable
+pub trait Transport<'a, A>
 where
     A: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'a,
 {
+    fn wrap(&self, a: A) -> Result<Box<dyn Stream + 'a>>;
 }
 
 /// Copies data in both directions between `a` and `b`, encoding/decoding as it goes.
@@ -157,12 +169,14 @@ where
 pub trait Transform<'a, R, W>: BufferTransform<'a, R, W> + Named + Configurable
 where
     R: AsyncRead + Clone + ?Sized + 'a,
-    W: AsyncWrite+ Clone + ?Sized + 'a {}
+    W: AsyncWrite + Clone + ?Sized + 'a,
+{
+}
 
 pub fn duplex_from_transform<'a, T, A, B>(transform: T) -> Result<Box<dyn Duplex<A, B>>>
 where
-    A: AsyncRead + AsyncWrite + Unpin+ Clone + ?Sized + 'a,
-    B: AsyncRead + AsyncWrite + Unpin+ Clone + ?Sized + 'a,
+    A: AsyncRead + AsyncWrite + Unpin + Clone + ?Sized + 'a,
+    B: AsyncRead + AsyncWrite + Unpin + Clone + ?Sized + 'a,
     T: Transform<'a, A, B> + 'a,
 {
     let _duplex: Box<dyn DuplexTransform<A, B>> =
@@ -172,9 +186,9 @@ where
 
 pub fn wrapping_from_transform<'a, T, R, W>(_transform: T) -> Result<Box<dyn Wrapping>>
 where
-    R: AsyncRead + Clone+ ?Sized + 'a,
-    W: AsyncWrite+ Clone + ?Sized + 'a,
-    T: Transform<'a,R,W>,
+    R: AsyncRead + Clone + ?Sized + 'a,
+    W: AsyncWrite + Clone + ?Sized + 'a,
+    T: Transform<'a, R, W>,
 {
     Err(Error::Other("not implemented yet".into()))
 }
@@ -216,12 +230,4 @@ where
 {
     let (r, w) = tokio::io::split(s);
     Ok((Box::new(r), Box::new(w)))
-}
-
-pub fn split<'s,S>( s: S,) -> Result<(&'s mut (dyn AsyncRead + Unpin + Send + Sync + 's), &'s mut (dyn AsyncWrite + Unpin + Send + Sync + 's))>
-where
-    S: AsyncRead + AsyncWrite + Unpin + Send + Sync + 's,
-{
-    let (mut r, mut w) = tokio::io::split(s);
-    Ok((&mut r, &mut w))
 }

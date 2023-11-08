@@ -1,10 +1,11 @@
 use crate::handler::{EchoHandler, Handler};
+use ptrs::{stream::Stream, Role, TransportBuilder};
 
 use std::{convert::TryFrom, default::Default, net, str::FromStr};
 
 use clap::{Args, CommandFactory, Parser, Subcommand};
 use tokio::{
-    io::copy_bidirectional,
+    io::{copy_bidirectional, AsyncRead, AsyncWrite},
     net::{TcpListener, TcpStream},
     sync::mpsc::Sender,
 };
@@ -37,6 +38,8 @@ impl ProxyConfig {
 pub struct EntranceConfig {
     pt: String,
     pt_args: Vec<String>,
+    role: Role,
+    builder: Option<Box<dyn TransportBuilder>>,
 
     listen_address: net::SocketAddr,
     remote_address: net::SocketAddr,
@@ -78,6 +81,9 @@ impl Default for EntranceConfig {
         Self {
             pt: String::from("plain"),
             pt_args: vec![],
+            builder: None,
+            role: Role::Sealer,
+
             listen_address: DEFAULT_LISTEN_ADDRESS.parse().unwrap(),
             remote_address: DEFAULT_REMOTE_ADDRESS.parse().unwrap(),
             level: DEFAULT_LOG_LEVEL,
@@ -89,6 +95,8 @@ pub struct ExitConfig {
     pt: String,
     pt_args: Vec<String>,
     handler: Handler,
+    role: Role,
+    builder: Option<Box<dyn TransportBuilder>>,
 
     listen_address: net::SocketAddr,
 
@@ -131,6 +139,8 @@ impl Default for ExitConfig {
         Self {
             pt: String::from("plain"),
             pt_args: vec![],
+            builder: None,
+            role: Role::Revealer,
             listen_address: DEFAULT_SERVER_ADDRESS.parse().unwrap(),
             level: DEFAULT_LOG_LEVEL,
             handler: Handler::Echo(EchoHandler),

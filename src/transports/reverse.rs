@@ -1,8 +1,10 @@
 // use crate::pt::{stream::Transform, Transport};
-use crate::{Configurable, Named, Result};
+
+use crate::{stream::Stream, Configurable, Named, Result, Transport};
+
 use std::io::{BufReader, Read, Write};
 
-use tokio::io::{AsyncRead, AsyncReadExt};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite};
 
 pub const NAME: &str = "reverse";
 
@@ -27,7 +29,7 @@ impl Configurable for Reverse {
     }
 }
 
-pub async fn reverse<T: AsyncRead+Unpin>(mut r: T, mut w: &mut [u8]) -> Result<usize> {
+pub async fn reverse<T: AsyncRead + Unpin>(mut r: T, mut w: &mut [u8]) -> Result<usize> {
     let mut buf = vec![0_u8; 1024];
     let nr = r.read(&mut buf).await?;
     // println!("n: {} {:?}", nr, &buf[..nr]);
@@ -51,6 +53,15 @@ pub fn reverse_sync(incoming: &mut dyn Read, outgoing: &mut dyn Write) -> Result
     // println!("processed: {:?}", &processed[..nw]);
 
     Ok(nw as u64)
+}
+
+impl<'a, A> Transport<'a, A> for Reverse
+where
+    A: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'a,
+{
+    fn wrap(&self, a: A) -> Result<Box<dyn Stream + 'a>> {
+        Ok(Box::new(a))
+    }
 }
 
 #[cfg(test)]

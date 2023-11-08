@@ -8,41 +8,77 @@ pub mod ss_format;
 
 pub mod identity;
 
-// pub enum Transports {
-//     Identity(Box<dyn AsTransport>),
-//     Reverse(Box<dyn AsTransport>),
-//     HexEncoder(Box<dyn AsTransport>),
-//     // Http(http::Http),
-//     // PrefixTlsRecFrag(prefix_tls_rec_frag::PrefixTlsRecFrag),
-//     // SsFormat(ss_format::SsFormat),
-//     // EcdhEd25519(ecdh_ed25519::EcdhEd25519),
-//     // Base64(base64::Base64),
+use std::str::FromStr;
 
-//     // Other(Box<dyn TransportBuilder>),
-//     // OtherStreamHandler(Box<dyn StreamHandler>),
-// }
+use crate::{pt::wrap::WrapTransport, stream::Stream, Error, Result, Transport};
 
-// impl FromStr for Transports {
-//     type Err = crate::Error;
+use tokio::io::{AsyncRead, AsyncWrite};
 
-//     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-//         match s {
-//             "" | "identity" => Ok(Transports::Identity(Box::new(identity::Identity::new()))),
-//             "reverse" => Ok(Transports::Reverse(Box::new(reverse::Reverse::new()))),
-//             "hex" => Ok(Transports::HexEncoder(Box::new(
-//                 hex_encoder::HexEncoder::new(),
-//             ))),
-//             // "http" => Ok(Transports::Http(http::Http::new())),
-//             // "prefix_tls_rec_frag" => Ok(Transports::PrefixTlsRecFrag(prefix_tls_rec_frag::PrefixTlsRecFrag::new())),
-//             // "ss_format" => Ok(Transports::SsFormat(ss_format::SsFormat::new())),
-//             // "ecdh_ed25519" => Ok(Transports::EcdhEd25519(ecdh_ed25519::new()))
-//             // "base64" => Ok(Transports::Base64(base64::Base64::new())),
-//             // "water" =>
-//             // proteus =>
-//             _ => Err(std::io::Error::new(std::io::ErrorKind::Other, "not implemented yet").into()),
-//         }
-//     }
-// }
+pub enum Transports {
+    Identity,
+    Reverse,
+    // HexEncoder,
+    // Http,
+    // PrefixTlsRecFrag,
+    // SsFormat,
+    // EcdhEd25519,
+    Base64,
+    // Other(Box<dyn TransportBuilder>),
+    // OtherStreamHandler(Box<dyn StreamHandler>),
+}
+
+impl FromStr for Transports {
+    type Err = crate::Error;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s {
+            "" | "identity" => Ok(Transports::Identity),
+            "reverse" => Ok(Transports::Reverse),
+            // "hex" => Ok(Transports::HexEncoder),
+            "base64" => Ok(Transports::Base64),
+            _ => Err(std::io::Error::new(std::io::ErrorKind::Other, "not implemented yet").into()),
+        }
+    }
+}
+
+impl Transports {
+    pub fn build<'a, A>(&self) -> Box<dyn Transport<'a, A> + 'a>
+    where
+        A: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'a,
+    {
+        match self {
+            Transports::Identity => Box::new(identity::Identity::new()),
+            Transports::Reverse => Box::new(reverse::Reverse::new()),
+            Transports::Base64 => {
+                let wt: Box<dyn WrapTransport> = Box::new(base64::Base64Builder::default());
+                Box::new(wt)
+            } // Transports::HexEncoder => Box::new(hex_encoder::HexEncoder::new()),
+        }
+    }
+}
+
+struct NullTransport {}
+
+impl NullTransport {
+    fn new() -> Self {
+        Self {}
+    }
+}
+
+impl Default for NullTransport {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<'a, A> Transport<'a, A> for NullTransport
+where
+    A: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'a,
+{
+    fn wrap(&self, _r: A) -> Result<Box<dyn Stream + 'a>> {
+        Err(Error::NullTransport)
+    }
+}
 
 #[cfg(test)]
 mod test {
