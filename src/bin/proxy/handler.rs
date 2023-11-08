@@ -53,8 +53,11 @@ impl Socks5Handler {
     {
         let rt = PreferredRuntime::current()?;
         tokio::select! {
-            _ = socks5::handle_socks_conn(rt, stream) => {
-                trace!("echo finished")
+            r = socks5::handle_socks_conn(rt, stream) => {
+                if let Err(e) = r {
+                    tracing::error!("socks connection errored: {}", e);
+                }
+                trace!("socks connection completed")
             }
             _ = close_c.cancelled() => {}
         }
@@ -72,7 +75,10 @@ impl EchoHandler {
     {
         let (mut reader, mut writer) = split(stream);
         tokio::select! {
-            _ = copy(&mut reader, &mut writer) => {
+            r = copy(&mut reader, &mut writer) => {
+                if let Err(e) = r {
+                    tracing::error!("echo errored: {}", e);
+                }
                 trace!("echo finished")
             }
             _ = close_c.cancelled() => {}

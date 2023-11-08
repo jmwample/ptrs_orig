@@ -14,7 +14,7 @@ use tokio::{
     sync::mpsc::Sender,
 };
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, info, trace, Level};
+use tracing::{debug, error, info, trace, Level};
 
 pub const DEFAULT_LISTEN_ADDRESS: &str = "127.0.0.1:9000";
 pub const DEFAULT_SERVER_ADDRESS: &str = "127.0.0.1:9001";
@@ -61,14 +61,15 @@ impl EntranceConfig {
         info!("started proxy client on {}", self.listen_address);
 
         let builder = self.builder.as_ref().unwrap();
+        let t_name = builder.name();
 
         loop {
             let (in_stream, socket_addr) = listener.accept().await?;
+            trace!("new tcp connection {socket_addr}");
 
             let mut out_stream = TcpStream::connect(self.remote_address)
                 .await
                 .map_err(|e| anyhow!("failed to connect to remote: {}", e))?;
-
             let transport = builder
                 .build(&self.role)
                 .map_err(|e| anyhow!("failed to build transport: {:?}", e))?;
@@ -78,12 +79,12 @@ impl EntranceConfig {
                 let mut in_stream = match transport.wrap(Box::new(in_stream)) {
                     Ok(s) => s,
                     Err(e) => {
-                        debug!("failed to wrap in_stream ->({socket_addr}): {:?}", e);
+                        error!("failed to wrap in_stream ->({socket_addr}): {:?}", e);
                         return;
                     }
                 };
 
-                debug!("new connection {socket_addr}");
+                debug!("connection sealer established ->{t_name}-[{socket_addr}]");
                 tokio::select! {
                     _ = copy_bidirectional(&mut in_stream, &mut out_stream) => {}
                     _ = close_c.cancelled() => {
@@ -132,10 +133,10 @@ impl ExitConfig {
         info!("started server listening on {}", self.listen_address);
 
         let builder = self.builder.as_ref().unwrap();
-
+        let t_name = builder.name();
         loop {
             let (stream, socket_addr) = listener.accept().await?;
-            debug!("new tcp connection {socket_addr}");
+            trace!("new tcp connection {socket_addr}");
 
             let transport = builder
                 .build(&self.role)
@@ -145,10 +146,11 @@ impl ExitConfig {
             let stream = match transport.wrap(Box::new(stream)) {
                 Ok(s) => s,
                 Err(e) => {
-                    debug!("failed to wrap in_stream ->({socket_addr}): {:?}", e);
+                    error!("failed to wrap in_stream ->({socket_addr}): {:?}", e);
                     continue;
                 }
             };
+            debug!("connection successfully revealed ->{t_name}-[{socket_addr}]");
             tokio::spawn(handler.handle(stream, close_c));
         }
     }
