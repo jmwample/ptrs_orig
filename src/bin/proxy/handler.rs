@@ -65,10 +65,25 @@ impl Socks5Handler {
     }
 }
 
+/// `EchoHandler` is a simple handler that echoes any data it receives back to the sender.
+///
+/// It implements an asynchronous `handle` method that takes a stream and a cancellation token. The
+/// `handle` method reads data from the stream and echoes it back to the stream. It continues to do
+/// this until either an error occurs, an eof is received, or the cancellation token is cancelled.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct EchoHandler;
 
 impl EchoHandler {
+    /// Handle a stream by echoing any data received back to the sender.
+    ///
+    /// This method takes a stream and a cancellation token. It reads data from the stream
+    /// and writes it back to the stream. It continues to do this until either an error occurs
+    /// or the cancellation token is cancelled.
+    ///
+    /// # Arguments
+    ///
+    /// * `stream` - The stream to handle.
+    /// * `close_c` - The cancellation token.
     async fn handle<'a, RW>(&self, stream: RW, close_c: CancellationToken) -> Result<()>
     where
         RW: AsyncRead + AsyncWrite + Unpin + Send + 'a,
