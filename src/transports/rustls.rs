@@ -33,17 +33,12 @@ fn default_server_config() -> Result<Arc<rustls::ServerConfig>> {
 
 	// let certs = load_certs(&options.cert)?;
     // let key = load_keys(&options.key)?;
-	let cert = gen_self_signed_cert();
-	let key = cert.serialize_der().map_err(|e| Error::Other("cert err: {e}".into()))?;
-	let keys = rsa_private_keys( &mut Cursor::new( &key[..]))?;
-
-	let cert_u8 = cert.serialize_der().map_err(|e| Error::Other("cert err: {e}".into()))?;
-	let certificates = certs(&mut Cursor::new(&cert_u8[..]))?;
+	let (certs, key) = gen_self_signed_cert()?;
 
 	let server_config = rustls::ServerConfig::builder()
 		.with_safe_defaults()
 		.with_no_client_auth()
-		.with_single_cert(certificates, keys)
+		.with_single_cert(certs, key)
 		.map_err(|err| io::Error::new(io::ErrorKind::InvalidInput, err))?;
 
 	// Allow using SSLKEYLOGFILE.
@@ -52,16 +47,30 @@ fn default_server_config() -> Result<Arc<rustls::ServerConfig>> {
 	Ok(Arc::new(server_config))
 }
 
-fn gen_self_signed_cert() -> rcgen::Certificate {
+fn gen_self_signed_cert() -> Result<(Vec<rustls::Certificate>, rustls::PrivateKey)> {
 	// Generate a certificate that's valid for "localhost" and "hello.world.example"
-	let subject_alt_names = vec!["hello.world.example".to_string(),
-		"localhost".to_string()];
+	let subject_alt_names = vec!["hello.world.example".to_string(), "localhost".to_string()];
+	let cert = generate_simple_self_signed(subject_alt_names)?;
 
-	let cert = generate_simple_self_signed(subject_alt_names).unwrap();
-	trace!("{}", cert.serialize_pem().unwrap());
-	trace!("{}", cert.serialize_private_key_pem());
+	// Get rustls compatible cert
+	let mut cert_r = Cursor::new(cert.serialize_pem()?);
+	let certs = rustls_pemfile::certs(&mut cert_r)?;
+	let certificate = certs.into_iter().map(rustls::Certificate).collect();
 
-	cert
+	// Get rust compatible private key
+	let mut privkey_r = Cursor::new(cert.serialize_private_key_pem());
+	let mut keys = rustls_pemfile::pkcs8_private_keys(&mut privkey_r)?;
+	let key = match keys.len() {
+		0 => Err(format!("No PKCS8-encoded private key found"))?,
+		1 => rustls::PrivateKey(keys.remove(0)),
+		_ => Err(format!("More than one PKCS8-encoded private key found"))?,
+	};
+
+
+	trace!("cert: {}", cert.serialize_pem().unwrap());
+	trace!("key:{}", cert.serialize_private_key_pem());
+
+	Ok((vec![certificate], key))
 }
 
 fn default_client_config() -> Arc<rustls::ClientConfig> {
