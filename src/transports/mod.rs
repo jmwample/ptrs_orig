@@ -1,14 +1,19 @@
-pub mod base64;
-pub mod ecdh_ed25519;
-pub mod hex_encoder;
-pub mod http;
-pub mod prefix_tls_rec_frag;
-pub mod reverse;
-pub mod ss_format;
 
 pub mod identity;
 
-use crate::{pt::wrap::WrapTransport, stream::Stream, Error, Result, Transport};
+pub mod reverse;
+pub mod base64;
+pub mod hex_encoder;
+pub mod http;
+pub mod rustls;
+// pub mod proteus;
+
+pub mod prefix_tls_rec_frag;
+pub mod ss_format;
+pub mod ecdh_ed25519;
+
+
+use crate::{stream::Stream, Error, Result, TransportBuilder, Transport, Named, TryConfigure};
 use base64::Base64Builder;
 
 use tokio::io::{AsyncRead, AsyncWrite};
@@ -20,12 +25,13 @@ pub enum Transports {
     Reverse,
     // HexEncoder,
     // Http,
+    // Rustls,
+
     // PrefixTlsRecFrag,
     // SsFormat,
     // EcdhEd25519,
     Base64,
     // Other(Box<dyn TransportBuilder>),
-    // OtherStreamHandler(Box<dyn StreamHandler>),
 }
 
 impl FromStr for Transports {
@@ -43,17 +49,13 @@ impl FromStr for Transports {
 }
 
 impl Transports {
-    pub fn build<'a, A>(&self) -> Box<dyn Transport<'a, A> + 'a>
-    where
-        A: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'a,
+    pub fn builder<'a>(&self) -> Box<dyn TransportBuilder + Send + Sync + 'a>
     {
         match self {
-            Transports::Identity => Box::new(identity::Identity::new()),
-            Transports::Reverse => Box::new(reverse::Reverse::new()),
-            Transports::Base64 => {
-                let wt: Box<dyn WrapTransport> = Box::<Base64Builder>::default();
-                Box::new(wt)
-            } // Transports::HexEncoder => Box::new(hex_encoder::HexEncoder::new()),
+            Transports::Identity => Box::<identity::Identity>::default(),
+            Transports::Reverse => Box::<reverse::Builder>::default(),
+            Transports::Base64 => Box::<Base64Builder>::default(),
+            // Transports::HexEncoder => Box::<hex_encoder::HexEncoder>::default()),
         }
     }
 }
@@ -78,6 +80,16 @@ where
 {
     fn wrap(&self, _r: A) -> Result<Box<dyn Stream + 'a>> {
         Err(Error::NullTransport)
+    }
+}
+impl Named for NullTransport {
+    fn name(&self) -> &'static str {
+        "null"
+    }
+}
+impl TryConfigure for NullTransport {
+    fn set_config(&mut self, _config: &str) -> Result<()> {
+        Ok(())
     }
 }
 

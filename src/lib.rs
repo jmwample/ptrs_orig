@@ -23,11 +23,25 @@ use tokio::io::{AsyncRead, AsyncWrite};
 pub trait Named {
     fn name(&self) -> &'static str;
 }
+impl Named for Box<dyn Named> {
+    fn name(&self) -> &'static str {
+        self.as_ref().name()
+    }
+}
+impl Named for &'_ dyn Named {
+    fn name(&self) -> &'static str {
+        (*self).name()
+    }
+}
 
 pub trait Configurable {
     fn with_config(self, args: &str) -> Result<Self>
     where
         Self: Sized;
+}
+
+pub trait TryConfigure {
+    fn set_config(&mut self, args: &str) -> Result<()>;
 }
 
 pub enum Role {
@@ -38,7 +52,7 @@ pub enum Role {
     Revealer,
 }
 
-pub trait TransportBuilder: Named + Configurable {
+pub trait TransportBuilder {
     fn build(&self, r: &Role) -> Result<TransportInstance>;
 }
 
@@ -76,14 +90,34 @@ where
     fn wrap(&self, a: A) -> Result<Box<dyn Stream + 'a>>;
 }
 
+pub trait TransportInst<'a, A>: Named + TryConfigure + Transport<'a, A>
+where
+    A: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'a {}
+
 pub struct TransportInstance {
     inner: Box<dyn for<'a> Transport<'a, Box<dyn Stream + 'a>> + Send + Sync>,
+    //    inner: Box<dyn for<'a> TransportInst<'a, Box<dyn Stream + 'a>> + Send + Sync>,
+
 }
 impl TransportInstance {
+    // fn new(inner: Box<dyn for<'a> TransportInst<'a, Box<dyn Stream + 'a>> + Send + Sync>) -> Self {
     fn new(inner: Box<dyn for<'a> Transport<'a, Box<dyn Stream + 'a>> + Send + Sync>) -> Self {
         Self { inner }
     }
 }
+
+// impl Named for TransportInstance {
+//     fn name(&self) -> &'static str {
+//         self.inner.name()
+//     }
+// }
+
+// impl TryConfigure for TransportInstance {
+//     fn set_config(&mut self, args: &str) -> Result<()> {
+//         self.inner.set_config(args)?;
+//         Ok(())
+//     }
+// }
 
 impl<'a, A> Transport<'a, A> for TransportInstance
 where
@@ -121,7 +155,12 @@ where
 /// # Return value
 ///
 /// Returns a tuple of bytes copied `a` to `b` and bytes copied `b` to `a`.
-pub trait Wrapping: WrapTransport + Named + Configurable {}
+pub trait Wrapping: WrapTransport + Named + TryConfigure {}
+impl Named for Box<dyn Wrapping> {
+    fn name(&self) -> &'static str {
+        self.as_ref().name()
+    }
+}
 
 /// Copies data in one direction from `a` to `b`, applying the transform as it goes.
 ///
@@ -150,7 +189,7 @@ pub trait Wrapping: WrapTransport + Named + Configurable {}
 /// # Return value
 ///
 /// Returns a count of bytes copied `a` to `b`.
-pub trait Duplex<A, B>: DuplexTransform<A, B> + Named + Configurable
+pub trait Duplex<A, B>: DuplexTransform<A, B> + Named + TryConfigure
 where
     A: AsyncRead + AsyncWrite + Unpin + ?Sized,
     B: AsyncRead + AsyncWrite + Unpin + ?Sized,

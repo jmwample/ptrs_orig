@@ -1,6 +1,6 @@
 use crate::pt::copy::*;
 use crate::{
-    Configurable, Named, Result, Role, Stream, Transport, TransportBuilder, TransportInstance,
+    Configurable, Named, Result, Role, Stream, Transport, TransportBuilder, TransportInstance, TryConfigure,
 };
 
 use futures::ready;
@@ -38,6 +38,12 @@ impl Named for Identity {
 impl Configurable for Identity {
     fn with_config(self, _config: &str) -> Result<Self> {
         Ok(self)
+    }
+}
+
+impl TryConfigure for Identity {
+    fn set_config(&mut self, _config: &str) -> Result<()> {
+        Ok(())
     }
 }
 
@@ -137,7 +143,9 @@ mod test {
     ///
     #[tokio::test]
     async fn wrap_transport() {
-        let (sealer, revealer) = Identity::default().wrapper().unwrap();
+        let wrapper = Identity::default().sealer().unwrap();
+        let revealer = wrapper.reveal;
+        let sealer = wrapper.seal;
         let (mut client, mut server) = tokio::net::UnixStream::pair().unwrap();
 
         let server_task = tokio::spawn(async move {

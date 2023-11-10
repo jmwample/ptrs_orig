@@ -2,9 +2,10 @@ use crate::{
     // pt::transform::{BufferTransform, ReadTransform, WriteTransform},
     pt::transform::BufferTransform,
     stream::{combine, Stream},
-    wrap::WrapTransport,
+    // wrap::WrapTransport,
     Result,
-    Transport,
+    Transport, Wrapping,
+    TransportBuilder, TransportInstance, Role,
 };
 
 use tokio::io::{split, AsyncRead, AsyncWrite};
@@ -52,16 +53,16 @@ where
     }
 }
 
-impl<'a, A> Transport<'a, A> for Box<dyn WrapTransport>
-where
-    A: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'a,
-{
-    fn wrap(&self, a: A) -> Result<Box<dyn Stream + 'a>> {
-        let (r1, w1) = tokio::io::split(a);
-        let (sealer, revealer) = self.wrapper()?;
-        let r_prime = revealer.reveal(Box::new(r1)); // seal outgoing stream
-        let w_prime = sealer.seal(Box::new(w1)); // reveal incoming stream
-        Ok(Box::new(combine(r_prime, w_prime)))
+impl TransportBuilder for Box<dyn Wrapping> {
+    fn build(&self, r: &Role) -> Result<TransportInstance>{
+        match r {
+            Role::Sealer => {
+                Ok(TransportInstance::new(Box::new(self.sealer()?)))
+            }
+            Role::Revealer => {
+                Ok(TransportInstance::new(Box::new(self.revealer()?)))
+            }
+        }
     }
 }
 

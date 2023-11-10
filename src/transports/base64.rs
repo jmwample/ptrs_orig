@@ -1,6 +1,7 @@
 use crate::{
-    wrap::{Reveal, Seal, WrapTransport},
+    wrap::{Reveal, Seal, WrapTransport, Wrapper},
     Configurable, Named, Result,
+    Role, TransportBuilder, TransportInstance,
 };
 
 use tokio::io::{AsyncRead, AsyncWrite};
@@ -35,6 +36,16 @@ impl Configurable for Base64Builder {
     }
 }
 
+
+impl TransportBuilder for Base64Builder {
+    fn build(&self, r: &Role) -> Result<TransportInstance> {
+        match r {
+            Role::Sealer =>   Ok(TransportInstance::new(Box::new(self.sealer()?))),
+            Role::Revealer => Ok(TransportInstance::new(Box::new(self.revealer()?))),
+        }
+    }
+}
+
 impl Named for Base64 {
     fn name(&self) -> &'static str {
         NAME
@@ -60,26 +71,20 @@ impl Base64Builder {
 }
 
 impl WrapTransport for Base64Builder {
-    fn wrapper(
+    fn sealer(
         &self,
-    ) -> Result<(
-        Box<dyn Seal + Unpin + Send + Sync>,
-        Box<dyn Reveal + Unpin + Send + Sync>,
-    )> {
+    ) -> Result<Wrapper> {
         let seal = self.build_seal()?;
         let reveal = self.build_reveal()?;
-        Ok((seal, reveal))
+        Ok(Wrapper{seal, reveal})
     }
 
-    fn unwrapper(
+    fn revealer(
         &self,
-    ) -> Result<(
-        Box<dyn Seal + Unpin + Send + Sync>,
-        Box<dyn Reveal + Unpin + Send + Sync>,
-    )> {
+    ) -> Result<Wrapper> {
         let seal = self.build_seal()?;
         let reveal = self.build_reveal()?;
-        Ok((seal, reveal))
+        Ok(Wrapper{seal, reveal})
     }
 }
 
@@ -172,6 +177,7 @@ impl Reveal for Base64 {
 #[cfg(test)]
 mod test {
     use super::*;
+    use base64::{Engine as _, engine::general_purpose};
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::try_join;
 
@@ -186,7 +192,9 @@ mod test {
     ///
     #[tokio::test]
     async fn wrap_transport() {
-        let (sealer, revealer) = Base64Builder::default().wrapper().unwrap();
+        let wrapper = Base64Builder::default().sealer().unwrap();
+        let revealer = wrapper.reveal;
+        let sealer = wrapper.seal;
         let (mut client, mut server) = tokio::net::UnixStream::pair().unwrap();
 
         let server_task = tokio::spawn(async move {
@@ -209,5 +217,35 @@ mod test {
         });
 
         try_join!(client_task, server_task).unwrap();
+    }
+
+
+    /// tests showing tha the base64 encode / decode works with tokio::io::AsyncRead / AsyncWrite
+    /// traits and don't require the std::io::Read / Write traits.
+    #[tokio::test]
+    async fn stream_encode_decode() -> std::io::Result<()> {
+
+        let (mut c, mut s) = tokio::io::duplex(128);
+
+        tokio::spawn(async move {
+            let mut orig = [0_u8; 128];
+            let nr = s.read(&mut orig).await.unwrap();
+            let encoded: String = general_purpose::STANDARD_NO_PAD.encode(&orig[..nr]);
+            println!("server encoded to: {encoded}");
+
+            _ = s.write(encoded.as_bytes()).await;
+        });
+
+        let orig = b"dat!@#@ !@3123 123 1231 1@#2!$(Aa";
+        let _ = c.write(orig).await?;
+
+        let mut encoded = [0_u8; 128];
+        let nr = c.read(&mut encoded).await?;
+
+        let decoded = general_purpose::STANDARD_NO_PAD.decode(&encoded[..nr]).unwrap();
+        assert_eq!(orig.as_slice(), &decoded);
+
+        println!("client decoded to: {}", String::from_utf8(decoded).unwrap());
+        Ok(())
     }
 }

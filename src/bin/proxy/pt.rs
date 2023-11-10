@@ -1,11 +1,10 @@
-use ptrs::transports::identity::Identity;
-use ptrs::{Result, Role, TransportBuilder};
 
-// use std::str::FromStr;
+use ptrs::{Result, Role, TransportBuilder, transports::Transports};
 
-pub fn get_transport(_name: &str, _role: &Role) -> Result<Box<dyn TransportBuilder + Send + Sync>> {
-    // Transports::from_str(name)?.as_transport()
-    Ok(Box::new(Identity::new()))
+use std::str::FromStr;
+
+pub fn get_transport<'a>(name: &str, _role: &Role) -> Result<Box<dyn TransportBuilder + Send + Sync + 'a>> {
+    Ok(Transports::from_str(name)?.builder())
 }
 
 #[cfg(test)]
@@ -20,7 +19,6 @@ mod test {
         let name = "identity";
 
         let transport = get_transport(name, &Role::Sealer)?;
-        assert_eq!(transport.name(), name);
 
         let (c, s) = UnixStream::pair()?;
 

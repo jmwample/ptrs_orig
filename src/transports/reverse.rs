@@ -1,6 +1,10 @@
 // use crate::pt::{stream::Transform, Transport};
 
-use crate::{stream::Stream, Configurable, Named, Result, Transport};
+use crate::{
+    stream::Stream,
+    Configurable, Named, Result, Transport, TryConfigure,
+    TransportBuilder, TransportInstance, Role,
+};
 
 use std::io::{BufReader, Read, Write};
 
@@ -61,6 +65,33 @@ where
 {
     fn wrap(&self, a: A) -> Result<Box<dyn Stream + 'a>> {
         Ok(Box::new(a))
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Builder {}
+
+impl Named for Builder {
+    fn name(&self) -> &'static str {
+        NAME
+    }
+}
+
+impl Configurable for Builder {
+    fn with_config(self, _config: &str) -> Result<Self> {
+        Ok(self)
+    }
+}
+
+impl TryConfigure for Reverse {
+    fn set_config(&mut self, _config: &str) -> Result<()> {
+        Ok(())
+    }
+}
+
+impl TransportBuilder for Builder {
+    fn build(&self, _r: &Role) -> Result<TransportInstance> {
+        Ok(TransportInstance::new(Box::new(Reverse::new())))
     }
 }
 

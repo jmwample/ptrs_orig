@@ -37,6 +37,13 @@ tor-rpcbase = { version = "0.1.2", optional = true }
 tor-rtcompat = { version = "0.9.5", features = ["tokio", "rustls"]}
 tor-socksproto = { version = "0.7.5" }
 
+rustls = "0.21.8"
+tokio-rustls = "0.24.1"
+rustls-pemfile = "1.0.4"
+# rustls-pki-types = "0.2.1"
+webpki-roots = "0.25.2"
+rcgen = "0.11.3"
+
 [dev-dependencies]
 os_pipe = "1.1.4"
 tempfile = "3.8.1"

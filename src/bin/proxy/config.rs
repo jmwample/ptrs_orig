@@ -61,7 +61,7 @@ impl EntranceConfig {
         info!("started proxy client on {}", self.listen_address);
 
         let builder = self.builder.as_ref().unwrap();
-        let t_name = builder.name();
+        // let t_name = builder.name();
 
         loop {
             let (in_stream, socket_addr) = listener.accept().await?;
@@ -84,7 +84,7 @@ impl EntranceConfig {
                     }
                 };
 
-                debug!("connection sealer established ->{t_name}-[{socket_addr}]");
+                debug!("connection sealer established ->_-[{socket_addr}]");
                 tokio::select! {
                     _ = copy_bidirectional(&mut in_stream, &mut out_stream) => {}
                     _ = close_c.cancelled() => {
@@ -133,7 +133,7 @@ impl ExitConfig {
         info!("started server listening on {}", self.listen_address);
 
         let builder = self.builder.as_ref().unwrap();
-        let t_name = builder.name();
+        // let t_name = builder.name();
         loop {
             let (stream, socket_addr) = listener.accept().await?;
             trace!("new tcp connection {socket_addr}");
@@ -150,7 +150,7 @@ impl ExitConfig {
                     continue;
                 }
             };
-            debug!("connection successfully revealed ->{t_name}-[{socket_addr}]");
+            debug!("connection successfully revealed ->_-[{socket_addr}]");
             tokio::spawn(handler.handle(stream, close_c));
         }
     }

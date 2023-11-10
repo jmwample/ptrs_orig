@@ -23,21 +23,15 @@ impl Reveal for Identity {
 }
 
 impl WrapTransport for Identity {
-    fn wrapper(
+    fn sealer(
         &self,
-    ) -> Result<(
-        Box<dyn Seal + Unpin + Send + Sync>,
-        Box<dyn Reveal + Unpin + Send + Sync>,
-    )> {
-        Ok((Box::new(*self), Box::new(*self)))
+    ) -> Result<Wrapper> {
+        Ok(Wrapper{ seal: Box::new(*self), reveal: Box::new(*self)})
     }
 
-    fn unwrapper(
+    fn revealer(
         &self,
-    ) -> Result<(
-        Box<dyn Seal + Unpin + Send + Sync>,
-        Box<dyn Reveal + Unpin + Send + Sync>,
-    )> {
-        Ok((Box::new(*self), Box::new(*self)))
+    ) -> Result<Wrapper> {
+        Ok(Wrapper{ seal: Box::new(*self), reveal: Box::new(*self)})
     }
 }
