@@ -1,17 +1,21 @@
 
-use crate::{Transport, Result, Role, Error, TransportBuilder, TransportInstance};
+use crate::{Transport, Result, Role, Error, Stream, TransportBuilder, TransportInstance};
 
 use async_trait::async_trait;
-use rcgen::generate_simple_self_signed;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_rustls::{TlsConnector, TlsAcceptor};
-use rustls_pemfile::{certs, rsa_private_keys};
 use tracing::trace;
+use rustls_pemfile::{certs, pkcs8_private_keys};
+
+
+pub(crate) mod certs;
+
 
 use std::{
 	sync::Arc,
-	io::{self, Cursor},
+	io::{self, BufReader},
 };
+
 
 #[derive(Clone)]
 struct Config {
@@ -22,23 +26,49 @@ struct Config {
 impl Default for Config {
 	fn default() -> Self {
 
+		let common_name = "example.com";
+		let subject_alt_names: Vec<String> = vec!["example.com".into(), "self-signed.example.com".into(), "jfaawekmawdvawf.example.com".into()];
+		let cert_set = certs::generate_and_sign(common_name, subject_alt_names).expect("failed to build server certs");
+
 		Self {
-			client_cfg: Some(default_client_config()),
-			server_cfg: Some(default_server_config().unwrap()),
+			client_cfg: Some(default_client_config_with_root(cert_set.ca_pem.as_bytes().to_vec())),
+			server_cfg: Some(default_server_config_with_ca(cert_set).unwrap()),
 		}
 	}
 }
 
-fn default_server_config() -> Result<Arc<rustls::ServerConfig>> {
+fn default_server_config_with_ca(cert_set: certs::SelfSignedSet) -> Result<Arc<rustls::ServerConfig>> {
 
-	// let certs = load_certs(&options.cert)?;
-    // let key = load_keys(&options.key)?;
-	let (certs, key) = gen_self_signed_cert()?;
+	trace!("cert: {}", cert_set.ca.certificate.serialize_pem().unwrap());
+	trace!("key:{}", cert_set.ca.certificate.serialize_private_key_pem());
+
+	let mut cert_store = rustls::RootCertStore::empty();
+
+	let ca_cert_reader = &mut BufReader::new(cert_set.ca_pem.as_bytes());
+	let ca_cert = rustls::Certificate(certs(ca_cert_reader).unwrap()[0].clone());
+
+    cert_store
+        .add(&ca_cert)
+        .expect("root CA not added to store");
+
+	let cert_reader = &mut BufReader::new(&cert_set.direct.as_bytes()[..]);
+	let key_reader = &mut BufReader::new(&cert_set.key[..]);
+
+	let cert_chain = certs(cert_reader)
+        .unwrap()
+        .into_iter()
+        .map(rustls::Certificate)
+        .collect();
+    let mut keys: Vec<rustls::PrivateKey> = pkcs8_private_keys(key_reader)
+        .unwrap()
+        .into_iter()
+        .map(rustls::PrivateKey)
+        .collect();
 
 	let server_config = rustls::ServerConfig::builder()
 		.with_safe_defaults()
 		.with_no_client_auth()
-		.with_single_cert(certs, key)
+		.with_single_cert(cert_chain, keys.remove(0))
 		.map_err(|err| io::Error::new(io::ErrorKind::InvalidInput, err))?;
 
 	// Allow using SSLKEYLOGFILE.
@@ -47,34 +77,20 @@ fn default_server_config() -> Result<Arc<rustls::ServerConfig>> {
 	Ok(Arc::new(server_config))
 }
 
-fn gen_self_signed_cert() -> Result<(Vec<rustls::Certificate>, rustls::PrivateKey)> {
-	// Generate a certificate that's valid for "localhost" and "hello.world.example"
-	let subject_alt_names = vec!["hello.world.example".to_string(), "localhost".to_string()];
-	let cert = generate_simple_self_signed(subject_alt_names)?;
 
-	// Get rustls compatible cert
-	let mut cert_r = Cursor::new(cert.serialize_pem()?);
-	let certs = rustls_pemfile::certs(&mut cert_r)?;
-	let certificate = certs.into_iter().map(rustls::Certificate).collect();
+fn default_client_config_with_root(root_cert: Vec<u8>) -> Arc<rustls::ClientConfig> {
+	let mut root_store = rustls::RootCertStore::empty();
 
-	// Get rust compatible private key
-	let mut privkey_r = Cursor::new(cert.serialize_private_key_pem());
-	let mut keys = rustls_pemfile::pkcs8_private_keys(&mut privkey_r)?;
-	let key = match keys.len() {
-		0 => Err(format!("No PKCS8-encoded private key found"))?,
-		1 => rustls::PrivateKey(keys.remove(0)),
-		_ => Err(format!("More than one PKCS8-encoded private key found"))?,
+	let mut root_reader = BufReader::new(&root_cert[..]);
+
+	let roots = match rustls_pemfile::read_one(&mut root_reader)
+		.expect("error occured while parsing generated root cert")
+		.expect("no root cert provided in generated set") {
+		rustls_pemfile::Item::X509Certificate(c) => c,
+		_ => panic!("bad root cert in cert set provide to client builder"),
 	};
 
-
-	trace!("cert: {}", cert.serialize_pem().unwrap());
-	trace!("key:{}", cert.serialize_private_key_pem());
-
-	Ok((vec![certificate], key))
-}
-
-fn default_client_config() -> Arc<rustls::ClientConfig> {
-	let mut root_store = rustls::RootCertStore::empty();
+	root_store.add(&rustls::Certificate(roots));
 	root_store.add_trust_anchors(
 		webpki_roots::TLS_SERVER_ROOTS
 			.iter()
@@ -131,9 +147,9 @@ impl Client {
 #[async_trait]
 impl<'a,A> Transport<'a, A> for Client
 where
-	A: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'a,
-{
-	async fn wrap(&self, a: A) -> Result<Box<dyn crate::Stream + 'a>> {
+    A: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'a,
+{ 
+    async fn wrap(&self, a: A) -> Result<Box<dyn Stream + 'a>> {
 		let config = self.config.client_cfg.clone().ok_or(Error::Other("no client config provided".into()))?;
 		let connector = TlsConnector::from(config).clone();
 		let server_name = "www.rust-lang.org".try_into().unwrap();
@@ -153,7 +169,7 @@ impl<'a,A> Transport<'a, A> for Server
 where
 	A: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'a,
 {
-	async fn wrap(&self, a: A) -> Result<Box<dyn crate::Stream + 'a>> {
+	async fn wrap(&self, a: A) -> Result<Box<dyn Stream + 'a>> {
 		let config = self.config.server_cfg.clone().ok_or(Error::Other("no server config provided".into()))?;
 		let acceptor = TlsAcceptor::from(config);
 		let mut stream = acceptor.accept(a).await?;
@@ -169,29 +185,25 @@ mod test {
 
 	#[tokio::test]
 	async fn async_tls_rustls_read_write() -> Result<()> {
-
-		let (c, s) = tokio::io::duplex(128);
-		// let mut sock = tokio::net::TcpStream::connect("www.rust-lang.org:443").await?;
+		let (mut c, mut s) = tokio::io::duplex(128);
+		let message = b"hello world asldkasda daweFAe0342323;l3 />?123";
+		let config = Config::default();
+		let server_config = config.clone();
 
 		tokio::spawn(async move {
 			let server = Server {
-				config: Config {
-					client_cfg: None,
-					server_cfg: Some(default_server_config()),
-				}
+				config: server_config,
 			};
 			let wrapped_server_conn = server.wrap(&mut s).await.unwrap();
 
 			let (mut reader, mut writer) = tokio::io::split(wrapped_server_conn);
 			let n = tokio::io::copy(&mut reader, &mut writer).await.unwrap();
-			writer.flush().await.unwrap();
+			assert_eq!(n, message.len() as u64);
+			// writer.flush().await.unwrap();
 		});
 
 		let client = Client{
-			config: Config {
-				client_cfg: Some(default_client_config()),
-				server_cfg: None,
-			}
+			config,
 		};
 		let wrapped_client_conn = client.wrap(&mut c).await?;
 
@@ -229,18 +241,4 @@ mod test {
 
 		Ok(())
 	}
-
-
-	/*
-	fn load_certs(path: &Path) -> io::Result<Vec<CertificateDer<'static>>> {
-		certs(&mut BufReader::new(File::open(path)?)).collect()
-	}
-
-	fn load_keys(path: &Path) -> io::Result<PrivateKeyDer<'static>> {
-		rsa_private_keys(&mut BufReader::new(File::open(path)?))
-			.next()
-			.unwrap()
-			.map(Into::into)
-	}
-	*/
 }

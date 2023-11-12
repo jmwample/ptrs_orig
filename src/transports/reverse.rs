@@ -9,6 +9,7 @@ use crate::{
 use std::io::{BufReader, Read, Write};
 
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite};
+use async_trait::async_trait;
 
 pub const NAME: &str = "reverse";
 
@@ -59,11 +60,12 @@ pub fn reverse_sync(incoming: &mut dyn Read, outgoing: &mut dyn Write) -> Result
     Ok(nw as u64)
 }
 
+#[async_trait]
 impl<'a, A> Transport<'a, A> for Reverse
 where
     A: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'a,
 {
-    fn wrap(&self, a: A) -> Result<Box<dyn Stream + 'a>> {
+    async fn wrap(&self, a: A) -> Result<Box<dyn Stream + 'a>> {
         Ok(Box::new(a))
     }
 }

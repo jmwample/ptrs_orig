@@ -1,6 +1,7 @@
 use crate::{Result, Transport, Stream, stream::combine};
 
 use tokio::io::{AsyncRead, AsyncWrite};
+use async_trait::async_trait;
 
 pub trait Reveal {
     fn reveal<'a>(
@@ -31,11 +32,12 @@ pub struct Wrapper {
     pub reveal: Box<dyn Reveal + Unpin + Send + Sync>,
 }
 
+#[async_trait]
 impl<'a,A> Transport<'a,A> for Wrapper
 where
 A: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'a,
 {
-    fn wrap(&self, a: A) -> Result<Box<dyn Stream + 'a>> {
+    async fn wrap(&self, a: A) -> Result<Box<dyn Stream + 'a>> {
         let (r1, w1) = tokio::io::split(a);
         let r_prime = self.reveal.reveal(Box::new(r1)); // seal outgoing stream
         let w_prime = self.seal.seal(Box::new(w1)); // reveal incoming stream

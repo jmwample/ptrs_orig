@@ -1,6 +1,7 @@
 use std::{fmt::Display, str::FromStr};
 
 use hex::FromHexError;
+use rcgen::RcgenError;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -10,6 +11,7 @@ pub enum Error {
     Other(Box<dyn std::error::Error>),
     IOError(std::io::Error),
     EncodeError(Box<dyn std::error::Error>),
+    CertGenError(RcgenError),
     NullTransport,
 }
 
@@ -19,6 +21,7 @@ impl Display for Error {
             Error::Other(e) => write!(f, "{}", e),
             Error::IOError(e) => write!(f, "{}", e),
             Error::EncodeError(e) => write!(f, "{}", e),
+            Error::CertGenError(e) => write!(f, "{}", e),
             Error::NullTransport => write!(f, "NullTransport"),
         }
     }
@@ -61,6 +64,12 @@ impl From<FromHexError> for Error {
 impl From<Box<dyn std::error::Error>> for Error {
     fn from(e: Box<dyn std::error::Error>) -> Self {
         Error::Other(e)
+    }
+}
+
+impl From<RcgenError> for Error {
+    fn from(e: RcgenError) -> Self {
+        Error::CertGenError(e)
     }
 }
 

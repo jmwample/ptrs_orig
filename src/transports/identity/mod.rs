@@ -5,6 +5,7 @@ use crate::{
 
 use futures::ready;
 use tokio::io::{AsyncRead, AsyncWrite};
+use async_trait::async_trait;
 
 use std::io;
 use std::pin::Pin;
@@ -47,11 +48,12 @@ impl TryConfigure for Identity {
     }
 }
 
+#[async_trait]
 impl<'a, A> Transport<'a, A> for Identity
 where
     A: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'a,
 {
-    fn wrap(&self, a: A) -> Result<Box<dyn Stream + 'a>> {
+    async fn wrap(&self, a: A) -> Result<Box<dyn Stream + 'a>> {
         Ok(Box::new(a))
     }
 }

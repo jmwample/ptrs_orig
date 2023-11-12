@@ -19,6 +19,7 @@ pub use stream::Stream;
 pub(crate) mod test_utils;
 
 use tokio::io::{AsyncRead, AsyncWrite};
+use async_trait::async_trait;
 
 pub trait Named {
     fn name(&self) -> &'static str;
@@ -83,11 +84,12 @@ pub trait TransportBuilder {
 /// # Return value
 ///
 /// Returns a tuple of bytes copied `a` to `b` and bytes copied `b` to `a`.
+#[async_trait]
 pub trait Transport<'a, A>
 where
     A: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'a,
 {
-    fn wrap(&self, a: A) -> Result<Box<dyn Stream + 'a>>;
+    async fn wrap(&self, a: A) -> Result<Box<dyn Stream + 'a>>;
 }
 
 pub trait TransportInst<'a, A>: Named + TryConfigure + Transport<'a, A>
@@ -118,15 +120,15 @@ impl TransportInstance {
 //         Ok(())
 //     }
 // }
-
-impl<'a, A> Transport<'a, A> for TransportInstance
-where
-    A: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'a,
-{
-    fn wrap(&self, a: A) -> Result<Box<dyn Stream + 'a>> {
-        self.inner.wrap(Box::new(a))
-    }
-}
+// #[async_trait]
+// impl<'a, A> Transport<'a, A> for TransportInstance
+// where
+//     A: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'a,
+// {
+//     async fn wrap(&self, a: A) -> Result<Box<dyn Stream + 'a>> {
+//         self.inner.wrap(Box::new(a))
+//     }
+// }
 
 /// Copies data in both directions between `a` and `b`, encoding/decoding as it goes.
 ///

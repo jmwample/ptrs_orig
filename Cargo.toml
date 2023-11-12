@@ -42,7 +42,8 @@ tokio-rustls = "0.24.1"
 rustls-pemfile = "1.0.4"
 # rustls-pki-types = "0.2.1"
 webpki-roots = "0.25.2"
-rcgen = "0.11.3"
+rcgen = { version = "0.11.3", features = ["pem", "x509-parser"] }
+x509-parser = { version = "0.15.1", features = ["verify"] }
 
 [dev-dependencies]
 os_pipe = "1.1.4"

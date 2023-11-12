@@ -17,6 +17,7 @@ use crate::{stream::Stream, Error, Result, TransportBuilder, Transport, Named, T
 use base64::Base64Builder;
 
 use tokio::io::{AsyncRead, AsyncWrite};
+use async_trait::async_trait;
 
 use std::str::FromStr;
 
@@ -74,11 +75,12 @@ impl Default for NullTransport {
     }
 }
 
+#[async_trait]
 impl<'a, A> Transport<'a, A> for NullTransport
 where
     A: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'a,
 {
-    fn wrap(&self, _r: A) -> Result<Box<dyn Stream + 'a>> {
+    async fn wrap(&self, _r: A) -> Result<Box<dyn Stream + 'a>> {
         Err(Error::NullTransport)
     }
 }
