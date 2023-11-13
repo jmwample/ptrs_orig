@@ -8,7 +8,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 impl std::error::Error for Error {}
 #[derive(Debug)]
 pub enum Error {
-    Other(Box<dyn std::error::Error + Send +Sync>),
+    Other(Box<dyn std::error::Error + Send + Sync>),
     IOError(std::io::Error),
     EncodeError(Box<dyn std::error::Error + Send + Sync>),
     CertGenError(RcgenError),

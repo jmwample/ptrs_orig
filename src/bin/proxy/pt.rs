@@ -23,11 +23,11 @@ impl TransportBuilder {
     where
         A: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'a,
     {
-        Ok(self.build::<A>()?.wrap(a).await?)
+        self.build()?.wrap(a).await
     }
 
-    fn build<'a, A>(self) -> Result<Box<identity::Identity>> {
-        Ok(Box::new(identity::Identity::default()))
+    fn build(self) -> Result<Box<identity::Identity>> {
+        Ok(Box::default())
     }
 }
 

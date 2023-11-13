@@ -13,7 +13,6 @@ pub mod ss_format;
 
 use crate::{stream::Stream, Error, Named, Result, Transport, TryConfigure};
 
-use futures::Future;
 use tokio::io::{AsyncRead, AsyncWrite};
 
 use std::str::FromStr;
@@ -77,8 +76,8 @@ impl<'a, A> Transport<'a, A> for NullTransport
 where
     A: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'a,
 {
-    fn wrap(&self, _r: A) -> impl Future<Output = Result<Box<dyn Stream + 'a>>> {
-        async { Err(Error::NullTransport) }
+    async fn wrap(&self, _r: A) -> Result<Box<dyn Stream + 'a>> {
+        Err(Error::NullTransport)
     }
 }
 impl Named for NullTransport {

@@ -57,7 +57,7 @@ fn default_server_config_with_ca(
         .add(&ca_cert)
         .expect("root CA not added to store");
 
-    let cert_reader = &mut BufReader::new(&cert_set.direct.as_bytes()[..]);
+    let cert_reader = &mut BufReader::new(cert_set.direct.as_bytes());
     let key_reader = &mut BufReader::new(&cert_set.key[..]);
 
     let cert_chain = certs(cert_reader)
@@ -116,8 +116,6 @@ fn default_client_config_with_root(root_cert: Vec<u8>) -> Arc<rustls::ClientConf
     Arc::new(config)
 }
 
-
-
 // impl TransportBuilder for RustlsBuilder {
 // 	fn build(&self, r: &Role) -> Result<crate::TransportInstance> {
 // 		match r {
@@ -138,7 +136,7 @@ impl Client {
             Some(config) => config.clone(),
             None => Config::default(),
         };
-        return Client { config };
+        Client { config }
     }
 
     async fn wrap<'a, A>(&self, a: A) -> Result<Box<dyn Stream + 'a>>
