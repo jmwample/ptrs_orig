@@ -3,13 +3,14 @@
 use crate::{
     stream::Stream,
     Configurable, Named, Result, Transport, TryConfigure,
-    TransportBuilder, TransportInstance, Role,
+    // TransportBuilder, TransportInstance, Role,
 };
 
 use std::io::{BufReader, Read, Write};
 
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite};
 use async_trait::async_trait;
+use futures::Future;
 
 pub const NAME: &str = "reverse";
 
@@ -60,12 +61,12 @@ pub fn reverse_sync(incoming: &mut dyn Read, outgoing: &mut dyn Write) -> Result
     Ok(nw as u64)
 }
 
-#[async_trait]
+// #[async_trait]
 impl<'a, A> Transport<'a, A> for Reverse
 where
     A: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'a,
 {
-    async fn wrap(&self, a: A) -> Result<Box<dyn Stream + 'a>> {
+    fn wrap(&self, a: A) -> impl Future< Output=Result<Box<dyn Stream + 'a>>> {
         Ok(Box::new(a))
     }
 }
@@ -91,11 +92,11 @@ impl TryConfigure for Reverse {
     }
 }
 
-impl TransportBuilder for Builder {
-    fn build(&self, _r: &Role) -> Result<TransportInstance> {
-        Ok(TransportInstance::new(Box::new(Reverse::new())))
-    }
-}
+// impl TransportBuilder for Builder {
+//     fn build(&self, _r: &Role) -> Result<TransportInstance> {
+//         Ok(TransportInstance::new(Box::new(Reverse::new())))
+//     }
+// }
 
 #[cfg(test)]
 mod test {

@@ -13,11 +13,12 @@ pub mod ss_format;
 pub mod ecdh_ed25519;
 
 
-use crate::{stream::Stream, Error, Result, TransportBuilder, Transport, Named, TryConfigure};
+use crate::{stream::Stream, Error, Result, Transport, Named, TryConfigure};
 use base64::Base64Builder;
 
 use tokio::io::{AsyncRead, AsyncWrite};
 use async_trait::async_trait;
+use futures::Future;
 
 use std::str::FromStr;
 
@@ -49,17 +50,17 @@ impl FromStr for Transports {
     }
 }
 
-impl Transports {
-    pub fn builder<'a>(&self) -> Box<dyn TransportBuilder + Send + Sync + 'a>
-    {
-        match self {
-            Transports::Identity => Box::<identity::Identity>::default(),
-            Transports::Reverse => Box::<reverse::Builder>::default(),
-            Transports::Base64 => Box::<Base64Builder>::default(),
-            // Transports::HexEncoder => Box::<hex_encoder::HexEncoder>::default()),
-        }
-    }
-}
+// impl Transports {
+//     pub fn builder<'a>(&self) -> Box<dyn TransportBuilder + Send + Sync + 'a>
+//     {
+//         match self {
+//             Transports::Identity => Box::<identity::Identity>::default(),
+//             Transports::Reverse => Box::<reverse::Builder>::default(),
+//             Transports::Base64 => Box::<Base64Builder>::default(),
+//             // Transports::HexEncoder => Box::<hex_encoder::HexEncoder>::default()),
+//         }
+//     }
+// }
 
 struct NullTransport {}
 
@@ -75,13 +76,15 @@ impl Default for NullTransport {
     }
 }
 
-#[async_trait]
+// #[async_trait]
 impl<'a, A> Transport<'a, A> for NullTransport
 where
     A: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'a,
 {
-    async fn wrap(&self, _r: A) -> Result<Box<dyn Stream + 'a>> {
-        Err(Error::NullTransport)
+    fn wrap(&self, _r: A) -> impl Future< Output=Result<Box<dyn Stream + 'a>>> {
+        async {
+            Err(Error::NullTransport)
+        }
     }
 }
 impl Named for NullTransport {

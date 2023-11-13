@@ -20,6 +20,7 @@ pub(crate) mod test_utils;
 
 use tokio::io::{AsyncRead, AsyncWrite};
 use async_trait::async_trait;
+use futures::Future;
 
 pub trait Named {
     fn name(&self) -> &'static str;
@@ -53,9 +54,9 @@ pub enum Role {
     Revealer,
 }
 
-pub trait TransportBuilder {
-    fn build(&self, r: &Role) -> Result<TransportInstance>;
-}
+// pub trait TransportBuilder {
+//     fn build(&self, r: &Role) -> Result<TransportInstance>;
+// }
 
 /// Copies data in both directions between `a` and `b`, encoding/decoding as it goes.
 ///
@@ -84,29 +85,28 @@ pub trait TransportBuilder {
 /// # Return value
 ///
 /// Returns a tuple of bytes copied `a` to `b` and bytes copied `b` to `a`.
-#[async_trait]
 pub trait Transport<'a, A>
 where
     A: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'a,
 {
-    async fn wrap(&self, a: A) -> Result<Box<dyn Stream + 'a>>;
+    fn wrap(&self, a: A) -> impl Future<Output=Result<Box<dyn Stream + 'a>>>;
 }
 
 pub trait TransportInst<'a, A>: Named + TryConfigure + Transport<'a, A>
 where
     A: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'a {}
 
-pub struct TransportInstance {
-    inner: Box<dyn for<'a> Transport<'a, Box<dyn Stream + 'a>> + Send + Sync>,
-    //    inner: Box<dyn for<'a> TransportInst<'a, Box<dyn Stream + 'a>> + Send + Sync>,
+// pub struct TransportInstance {
+//     inner: Box<dyn for<'a> Transport<'a, Box<dyn Stream + 'a>> + Send + Sync>,
+//     //    inner: Box<dyn for<'a> TransportInst<'a, Box<dyn Stream + 'a>> + Send + Sync>,
 
-}
-impl TransportInstance {
-    // fn new(inner: Box<dyn for<'a> TransportInst<'a, Box<dyn Stream + 'a>> + Send + Sync>) -> Self {
-    fn new(inner: Box<dyn for<'a> Transport<'a, Box<dyn Stream + 'a>> + Send + Sync>) -> Self {
-        Self { inner }
-    }
-}
+// }
+// impl TransportInstance {
+//     // fn new(inner: Box<dyn for<'a> TransportInst<'a, Box<dyn Stream + 'a>> + Send + Sync>) -> Self {
+//     fn new(inner: Box<dyn for<'a> Transport<'a, Box<dyn Stream + 'a>> + Send + Sync>) -> Self {
+//         Self { inner }
+//     }
+// }
 
 // impl Named for TransportInstance {
 //     fn name(&self) -> &'static str {

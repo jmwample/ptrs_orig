@@ -1,12 +1,12 @@
 
-use crate::{Transport, Result, Role, Error, Stream, TransportBuilder, TransportInstance};
+use crate::{Transport, Result, Role, Error, Stream};
 
 use async_trait::async_trait;
 use tokio::io::{AsyncRead, AsyncWrite};
-use tokio_rustls::{TlsConnector, TlsAcceptor};
+use tokio_rustls::{TlsConnector, TlsAcceptor, TlsStream};
 use tracing::trace;
 use rustls_pemfile::{certs, pkcs8_private_keys};
-
+use futures::Future;
 
 pub(crate) mod certs;
 
@@ -119,15 +119,15 @@ pub struct RustlsBuilder {
 	config: Option<Config>,
 }
 
-impl TransportBuilder for RustlsBuilder {
-	fn build(&self, r: &Role) -> Result<crate::TransportInstance> {
-		match r {
-			Role::Sealer => Ok(TransportInstance::new(Box::new(Client::from_config(self.config.as_ref())))),
-			// Role::Revealer => Ok(TransportInstance::new(Box::new(Client::from_config(self.config.as_ref())))),
-			Role::Revealer => Err(Error::Other("not implemented yet".into())),
-		}
-	}
-}
+// impl TransportBuilder for RustlsBuilder {
+// 	fn build(&self, r: &Role) -> Result<crate::TransportInstance> {
+// 		match r {
+// 			Role::Sealer => Ok(TransportInstance::new(Box::new(Client::from_config(self.config.as_ref())))),
+// 			// Role::Revealer => Ok(TransportInstance::new(Box::new(Client::from_config(self.config.as_ref())))),
+// 			Role::Revealer => Err(Error::Other("not implemented yet".into())),
+// 		}
+// 	}
+// }
 
 
 struct Client {
@@ -142,21 +142,26 @@ impl Client {
 		};
 		return Client{config}
 	}
-}
 
-#[async_trait]
-impl<'a,A> Transport<'a, A> for Client
-where
-    A: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'a,
-{ 
-    async fn wrap(&self, a: A) -> Result<Box<dyn Stream + 'a>> {
+	async fn wrap<'a,A>(&self, a: A) -> Result<Box<dyn Stream + 'a>>
+	where
+    	A: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'a,
+	{
 		let config = self.config.client_cfg.clone().ok_or(Error::Other("no client config provided".into()))?;
 		let connector = TlsConnector::from(config).clone();
 		let server_name = "www.rust-lang.org".try_into().unwrap();
 		let stream = connector.connect(server_name, a).await?;
 		Ok(Box::new(stream))
 	}
+}
 
+impl<'a,A> Transport<'a, A> for Client
+where
+    A: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'a,
+{
+    fn wrap(&self, a: A) -> impl Future< Output=Result<Box<dyn Stream + 'a>>> {
+		self.wrap(a)
+	}
 }
 
 
@@ -164,16 +169,25 @@ struct Server {
 	config:Config,
 }
 
-#[async_trait]
+// #[async_trait]
 impl<'a,A> Transport<'a, A> for Server
 where
 	A: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'a,
 {
-	async fn wrap(&self, a: A) -> Result<Box<dyn Stream + 'a>> {
+	fn wrap(&self, a: A) -> impl Future<Output=Result<Box<dyn Stream + 'a>>> {
+		self.wrap(a)
+	}
+}
+
+impl Server {
+	async fn wrap<'a,A>(&self, a: A) -> Result<Box<dyn Stream + 'a>>
+	where
+    	A: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'a,
+	{
 		let config = self.config.server_cfg.clone().ok_or(Error::Other("no server config provided".into()))?;
 		let acceptor = TlsAcceptor::from(config);
-		let mut stream = acceptor.accept(a).await?;
-		Ok(Box::new(a))
+		let stream = acceptor.accept(a).await?;
+		Ok(Box::new(stream))
 	}
 }
 

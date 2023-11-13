@@ -1,7 +1,7 @@
 use crate::{
     wrap::{Reveal, Seal, WrapTransport, Wrapper},
     Configurable, Named, Result,
-    Role, TransportBuilder, TransportInstance,
+    Role, // TransportBuilder, TransportInstance,
 };
 
 use tokio::io::{AsyncRead, AsyncWrite};
@@ -37,14 +37,14 @@ impl Configurable for Base64Builder {
 }
 
 
-impl TransportBuilder for Base64Builder {
-    fn build(&self, r: &Role) -> Result<TransportInstance> {
-        match r {
-            Role::Sealer =>   Ok(TransportInstance::new(Box::new(self.sealer()?))),
-            Role::Revealer => Ok(TransportInstance::new(Box::new(self.revealer()?))),
-        }
-    }
-}
+// impl TransportBuilder for Base64Builder {
+//     fn build(&self, r: &Role) -> Result<TransportInstance> {
+//         match r {
+//             Role::Sealer =>   Ok(TransportInstance::new(Box::new(self.sealer()?))),
+//             Role::Revealer => Ok(TransportInstance::new(Box::new(self.revealer()?))),
+//         }
+//     }
+// }
 
 impl Named for Base64 {
     fn name(&self) -> &'static str {
