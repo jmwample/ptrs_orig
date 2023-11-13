@@ -18,9 +18,8 @@ pub use stream::Stream;
 #[cfg(test)]
 pub(crate) mod test_utils;
 
-use tokio::io::{AsyncRead, AsyncWrite};
-use async_trait::async_trait;
 use futures::Future;
+use tokio::io::{AsyncRead, AsyncWrite};
 
 pub trait Named {
     fn name(&self) -> &'static str;
@@ -46,6 +45,7 @@ pub trait TryConfigure {
     fn set_config(&mut self, args: &str) -> Result<()>;
 }
 
+#[derive(Clone, PartialEq)]
 pub enum Role {
     /// Plaintext -> Ciphertext transformation
     Sealer,
@@ -89,12 +89,14 @@ pub trait Transport<'a, A>
 where
     A: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'a,
 {
-    fn wrap(&self, a: A) -> impl Future<Output=Result<Box<dyn Stream + 'a>>>;
+    fn wrap(&self, a: A) -> impl Future<Output = Result<Box<dyn Stream + 'a>>>;
 }
 
 pub trait TransportInst<'a, A>: Named + TryConfigure + Transport<'a, A>
 where
-    A: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'a {}
+    A: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'a,
+{
+}
 
 // pub struct TransportInstance {
 //     inner: Box<dyn for<'a> Transport<'a, Box<dyn Stream + 'a>> + Send + Sync>,

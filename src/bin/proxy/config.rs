@@ -1,8 +1,9 @@
 use crate::{
     handler::{EchoHandler, Handler},
     pt::get_transport,
+    pt::TransportBuilder,
 };
-use ptrs::{Role, Transport, TransportBuilder};
+use ptrs::Role; //, Transport, TransportBuilder};
 
 use std::{convert::TryFrom, default::Default, net, str::FromStr};
 
@@ -43,7 +44,7 @@ pub struct EntranceConfig {
     pt: String,
     pt_args: Vec<String>,
     role: Role,
-    builder: Option<Box<dyn TransportBuilder>>,
+    builder: Option<TransportBuilder>,
 
     listen_address: net::SocketAddr,
     remote_address: net::SocketAddr,
@@ -60,8 +61,7 @@ impl EntranceConfig {
         let listener = TcpListener::bind(self.listen_address).await.unwrap();
         info!("started proxy client on {}", self.listen_address);
 
-        let builder = self.builder.as_ref().unwrap();
-        // let t_name = builder.name();
+        let transport = self.builder.unwrap();
 
         loop {
             let (in_stream, socket_addr) = listener.accept().await?;
@@ -69,21 +69,30 @@ impl EntranceConfig {
 
             let mut out_stream = TcpStream::connect(self.remote_address)
                 .await
-                .map_err(|e| anyhow!("failed to connect to remote: {}", e))?;
-            let transport = builder
-                .build(&self.role)
-                .map_err(|e| anyhow!("failed to build transport: {:?}", e))?;
+                .map_err(|e: std::io::Error| anyhow!("failed to connect to remote: {}", e))?;
+            // let transport = builder
+            //     .build(&self.role)
+            //     .map_err(|e| anyhow!("failed to build transport: {:?}", e))?;
 
+            // Establish the tunnel (i.e. complete handshake unless cancelled)
             let close_c = close.clone();
-            tokio::spawn(async move {
-                let mut in_stream = match transport.wrap(Box::new(in_stream)) {
-                    Ok(s) => s,
-                    Err(e) => {
-                        error!("failed to wrap in_stream ->({socket_addr}): {:?}", e);
-                        return;
+            let mut in_stream = tokio::select! {
+                r = transport.clone().wrap(Box::new(in_stream)) => {
+                    match r {
+                        Ok(s) => s,
+                        Err(e) => {
+                            error!("failed to wrap in_stream ->({socket_addr}): {:?}", e);
+                            continue
+                        }
                     }
-                };
+                }
+                _ = close_c.cancelled() => {
+                    debug!("connection cancelled before established for {socket_addr}");
+                    continue
+                }
+            };
 
+            tokio::spawn(async move {
                 debug!("connection sealer established ->_-[{socket_addr}]");
                 tokio::select! {
                     _ = copy_bidirectional(&mut in_stream, &mut out_stream) => {}
@@ -116,7 +125,7 @@ pub struct ExitConfig {
     pt_args: Vec<String>,
     handler: Handler,
     role: Role,
-    builder: Option<Box<dyn TransportBuilder>>,
+    builder: Option<TransportBuilder>,
 
     listen_address: net::SocketAddr,
 
@@ -132,18 +141,15 @@ impl ExitConfig {
         let listener = TcpListener::bind(self.listen_address).await.unwrap();
         info!("started server listening on {}", self.listen_address);
 
-        let builder = self.builder.as_ref().unwrap();
+        let transport = self.builder.as_ref().unwrap();
         // let t_name = builder.name();
         loop {
             let (stream, socket_addr) = listener.accept().await?;
             trace!("new tcp connection {socket_addr}");
 
-            let transport = builder
-                .build(&self.role)
-                .map_err(|e| anyhow!("failed to build transport: {:?}", e))?;
             let close_c = close.clone();
             let handler = self.handler;
-            let stream = match transport.wrap(Box::new(stream)) {
+            let stream = match transport.clone().wrap(Box::new(stream)).await {
                 Ok(s) => s,
                 Err(e) => {
                     error!("failed to wrap in_stream ->({socket_addr}): {:?}", e);
@@ -189,7 +195,7 @@ impl TryFrom<Cli> for ProxyConfig {
 
                 config.pt = "".to_string();
                 config.pt_args = vec![];
-                let builder = get_transport(&config.pt, &config.role)
+                let builder = get_transport(&config.pt, config.role.clone())
                     .map_err(|e| anyhow!("failed to get transport: {:?}", e))?;
                 config.builder = Some(builder);
 
@@ -217,7 +223,7 @@ impl TryFrom<Cli> for ProxyConfig {
 
                 config.pt = "".to_string();
                 config.pt_args = vec![];
-                let builder = get_transport(&config.pt, &config.role)
+                let builder = get_transport(&config.pt, config.role.clone())
                     .map_err(|e| anyhow!("failed to get transport: {:?}", e))?;
                 config.builder = Some(builder);
 

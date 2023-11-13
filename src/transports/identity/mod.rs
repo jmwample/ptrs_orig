@@ -1,11 +1,8 @@
 use crate::pt::copy::*;
-use crate::{
-    Configurable, Named, Result, Role, Stream, Transport, TryConfigure,
-};
+use crate::{Configurable, Named, Result, Stream, Transport, TryConfigure};
 
 use futures::{ready, Future};
 use tokio::io::{AsyncRead, AsyncWrite};
-use async_trait::async_trait;
 
 use std::io;
 use std::pin::Pin;
@@ -27,6 +24,13 @@ pub struct Identity {}
 impl Identity {
     pub fn new() -> Self {
         Identity {}
+    }
+
+    async fn wrap<'a, A>(&self, a: A) -> Result<Box<dyn Stream + 'a>>
+    where
+        A: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'a,
+    {
+        Ok(Box::new(a))
     }
 }
 
@@ -52,8 +56,8 @@ impl<'a, A> Transport<'a, A> for Identity
 where
     A: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'a,
 {
-    fn wrap(&self, a: A) -> impl Future<Output=Result<Box<dyn Stream + 'a>>> {
-        Ok(Box::new(a))
+    fn wrap(&self, a: A) -> impl Future<Output = Result<Box<dyn Stream + 'a>>> {
+        self.wrap(a)
     }
 }
 

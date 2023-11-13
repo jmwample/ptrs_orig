@@ -2,15 +2,18 @@
 
 use crate::{
     stream::Stream,
-    Configurable, Named, Result, Transport, TryConfigure,
+    Configurable,
+    Named,
+    Result,
+    Transport,
+    TryConfigure,
     // TransportBuilder, TransportInstance, Role,
 };
 
 use std::io::{BufReader, Read, Write};
 
-use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite};
-use async_trait::async_trait;
 use futures::Future;
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite};
 
 pub const NAME: &str = "reverse";
 
@@ -20,6 +23,13 @@ pub struct Reverse {}
 impl Reverse {
     pub fn new() -> Self {
         Reverse {}
+    }
+
+    async fn wrap<'a, A>(&self, a: A) -> Result<Box<dyn Stream + 'a>>
+    where
+        A: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'a,
+    {
+        Ok(Box::new(a))
     }
 }
 
@@ -66,8 +76,8 @@ impl<'a, A> Transport<'a, A> for Reverse
 where
     A: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'a,
 {
-    fn wrap(&self, a: A) -> impl Future< Output=Result<Box<dyn Stream + 'a>>> {
-        Ok(Box::new(a))
+    fn wrap(&self, a: A) -> impl Future<Output = Result<Box<dyn Stream + 'a>>> {
+        self.wrap(a)
     }
 }
 

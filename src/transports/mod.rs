@@ -1,24 +1,20 @@
-
 pub mod identity;
 
-pub mod reverse;
 pub mod base64;
 pub mod hex_encoder;
 pub mod http;
+pub mod reverse;
 pub mod rustls;
 // pub mod proteus;
 
+pub mod ecdh_ed25519;
 pub mod prefix_tls_rec_frag;
 pub mod ss_format;
-pub mod ecdh_ed25519;
 
+use crate::{stream::Stream, Error, Named, Result, Transport, TryConfigure};
 
-use crate::{stream::Stream, Error, Result, Transport, Named, TryConfigure};
-use base64::Base64Builder;
-
-use tokio::io::{AsyncRead, AsyncWrite};
-use async_trait::async_trait;
 use futures::Future;
+use tokio::io::{AsyncRead, AsyncWrite};
 
 use std::str::FromStr;
 
@@ -81,10 +77,8 @@ impl<'a, A> Transport<'a, A> for NullTransport
 where
     A: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'a,
 {
-    fn wrap(&self, _r: A) -> impl Future< Output=Result<Box<dyn Stream + 'a>>> {
-        async {
-            Err(Error::NullTransport)
-        }
+    fn wrap(&self, _r: A) -> impl Future<Output = Result<Box<dyn Stream + 'a>>> {
+        async { Err(Error::NullTransport) }
     }
 }
 impl Named for NullTransport {

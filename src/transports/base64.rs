@@ -1,7 +1,9 @@
 use crate::{
     wrap::{Reveal, Seal, WrapTransport, Wrapper},
-    Configurable, Named, Result,
-    Role, // TransportBuilder, TransportInstance,
+    Configurable,
+    Named,
+    Result,
+    // Role, TransportBuilder, TransportInstance,
 };
 
 use tokio::io::{AsyncRead, AsyncWrite};
@@ -35,7 +37,6 @@ impl Configurable for Base64Builder {
         Ok(self)
     }
 }
-
 
 // impl TransportBuilder for Base64Builder {
 //     fn build(&self, r: &Role) -> Result<TransportInstance> {
@@ -71,20 +72,16 @@ impl Base64Builder {
 }
 
 impl WrapTransport for Base64Builder {
-    fn sealer(
-        &self,
-    ) -> Result<Wrapper> {
+    fn sealer(&self) -> Result<Wrapper> {
         let seal = self.build_seal()?;
         let reveal = self.build_reveal()?;
-        Ok(Wrapper{seal, reveal})
+        Ok(Wrapper { seal, reveal })
     }
 
-    fn revealer(
-        &self,
-    ) -> Result<Wrapper> {
+    fn revealer(&self) -> Result<Wrapper> {
         let seal = self.build_seal()?;
         let reveal = self.build_reveal()?;
-        Ok(Wrapper{seal, reveal})
+        Ok(Wrapper { seal, reveal })
     }
 }
 
@@ -177,7 +174,7 @@ impl Reveal for Base64 {
 #[cfg(test)]
 mod test {
     use super::*;
-    use base64::{Engine as _, engine::general_purpose};
+    use base64::{engine::general_purpose, Engine as _};
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::try_join;
 
@@ -219,12 +216,10 @@ mod test {
         try_join!(client_task, server_task).unwrap();
     }
 
-
     /// tests showing tha the base64 encode / decode works with tokio::io::AsyncRead / AsyncWrite
     /// traits and don't require the std::io::Read / Write traits.
     #[tokio::test]
     async fn stream_encode_decode() -> std::io::Result<()> {
-
         let (mut c, mut s) = tokio::io::duplex(128);
 
         tokio::spawn(async move {
@@ -242,7 +237,9 @@ mod test {
         let mut encoded = [0_u8; 128];
         let nr = c.read(&mut encoded).await?;
 
-        let decoded = general_purpose::STANDARD_NO_PAD.decode(&encoded[..nr]).unwrap();
+        let decoded = general_purpose::STANDARD_NO_PAD
+            .decode(&encoded[..nr])
+            .unwrap();
         assert_eq!(orig.as_slice(), &decoded);
 
         println!("client decoded to: {}", String::from_utf8(decoded).unwrap());

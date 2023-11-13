@@ -23,15 +23,17 @@ impl Reveal for Identity {
 }
 
 impl WrapTransport for Identity {
-    fn sealer(
-        &self,
-    ) -> Result<Wrapper> {
-        Ok(Wrapper{ seal: Box::new(*self), reveal: Box::new(*self)})
+    fn sealer(&self) -> Result<Wrapper> {
+        Ok(Wrapper {
+            seal: Box::new(*self),
+            reveal: Box::new(*self),
+        })
     }
 
-    fn revealer(
-        &self,
-    ) -> Result<Wrapper> {
-        Ok(Wrapper{ seal: Box::new(*self), reveal: Box::new(*self)})
+    fn revealer(&self) -> Result<Wrapper> {
+        Ok(Wrapper {
+            seal: Box::new(*self),
+            reveal: Box::new(*self),
+        })
     }
 }
