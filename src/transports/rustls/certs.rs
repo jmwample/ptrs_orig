@@ -14,7 +14,7 @@ pub struct SelfSignedSet {
     pub csr_pem: String,
     pub direct: String,
     pub indirect: String,
-    pub key: Vec<u8>,
+    pub key: String,
 }
 
 pub(crate) fn generate_and_sign(
@@ -28,7 +28,7 @@ pub(crate) fn generate_and_sign(
         .certificate
         .serialize_pem_with_signer(&ca.certificate)?;
     let indirect = ca.create_cert(&csr);
-    let key = entity.certificate.serialize_private_key_der();
+    let key = entity.certificate.serialize_private_key_pem();
     let ca_pem = ca.certificate.serialize_pem()?;
     let cert_set = SelfSignedSet {
         ca,
@@ -96,9 +96,12 @@ impl Entity {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::Error;
+    use rustls_pemfile::pkcs8_private_keys;
+    use std::io::BufReader;
 
     #[test]
-    fn generate_sign_verify() {
+    fn generate_sign_verify() -> Result<()> {
         let common_name = "example.com";
         let subject_alt_names: Vec<String> = vec![
             "example.com".into(),
@@ -106,6 +109,19 @@ mod test {
             "jfaawekmawdvawf.example.com".into(),
         ];
 
-        let _ = generate_and_sign(common_name, subject_alt_names).unwrap();
+        let cert_set = generate_and_sign(common_name, subject_alt_names).unwrap();
+        let key_reader = &mut BufReader::new(cert_set.key.as_bytes());
+
+        let keys: Vec<rustls::PrivateKey> = pkcs8_private_keys(key_reader)
+            .unwrap()
+            .into_iter()
+            .map(rustls::PrivateKey)
+            .collect();
+
+        if keys.is_empty() {
+            return Err(Error::Other("bad key, could not parsed by pkcs8".into()));
+        }
+
+        Ok(())
     }
 }

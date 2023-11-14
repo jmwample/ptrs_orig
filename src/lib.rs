@@ -54,10 +54,6 @@ pub enum Role {
     Revealer,
 }
 
-// pub trait TransportBuilder {
-//     fn build(&self, r: &Role) -> Result<TransportInstance>;
-// }
-
 /// Copies data in both directions between `a` and `b`, encoding/decoding as it goes.
 ///
 /// This function returns a future that will read from both streams,

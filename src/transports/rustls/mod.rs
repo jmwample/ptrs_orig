@@ -25,6 +25,7 @@ impl Default for Config {
         let subject_alt_names: Vec<String> = vec![
             "example.com".into(),
             "self-signed.example.com".into(),
+            "*.example.com".into(),
             "jfaawekmawdvawf.example.com".into(),
         ];
         let cert_set = certs::generate_and_sign(common_name, subject_alt_names)
@@ -58,7 +59,7 @@ fn default_server_config_with_ca(
         .expect("root CA not added to store");
 
     let cert_reader = &mut BufReader::new(cert_set.direct.as_bytes());
-    let key_reader = &mut BufReader::new(&cert_set.key[..]);
+    let key_reader = &mut BufReader::new(cert_set.key.as_bytes());
 
     let cert_chain = certs(cert_reader)
         .unwrap()
@@ -70,6 +71,10 @@ fn default_server_config_with_ca(
         .into_iter()
         .map(rustls::PrivateKey)
         .collect();
+
+    if keys.is_empty() {
+        return Err(Error::Other("bad key, could not parsed by pkcs8".into()));
+    }
 
     let server_config = rustls::ServerConfig::builder()
         .with_safe_defaults()
@@ -89,7 +94,7 @@ fn default_client_config_with_root(root_cert: Vec<u8>) -> Arc<rustls::ClientConf
     let mut root_reader = BufReader::new(&root_cert[..]);
 
     let roots = match rustls_pemfile::read_one(&mut root_reader)
-        .expect("error occured while parsing generated root cert")
+        .expect("error occurred while parsing generated root cert")
         .expect("no root cert provided in generated set")
     {
         rustls_pemfile::Item::X509Certificate(c) => c,
@@ -149,7 +154,7 @@ impl Client {
             .clone()
             .ok_or(Error::Other("no client config provided".into()))?;
         let connector = TlsConnector::from(config).clone();
-        let server_name = "www.rust-lang.org".try_into().unwrap();
+        let server_name = "www.example.com".try_into().unwrap();
         let stream = connector.connect(server_name, a).await?;
         Ok(Box::new(stream))
     }
