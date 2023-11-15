@@ -12,6 +12,7 @@ mod duplex;
 mod simplex;
 mod wrap;
 
+/// Identity transport applying no transform and passing bytes unchanged.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Identity {}
 

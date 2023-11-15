@@ -4,6 +4,7 @@
 <p>
   <a href="https://github.com/jmwample/ptrs/actions/workflows/rust.yml">
     <img src="https://github.com/jmwample/ptrs/actions/workflows/rust.yml/badge.svg?branch=main" alt="Build Status">
+  </a>
   <a href="https://codecov.io/gh/jmwample/ptrs" >
     <img src="https://codecov.io/gh/jmwample/ptrs/graph/badge.svg?token=M5366KWEA4"/>
   </a>
@@ -25,9 +26,10 @@ PTRS is a library for writing pluggable transports in Rust.
 
 ## Library Usage
 
-This library (currently) revolves around the abstraction of connections as anything that implement
-the traits [`tokio::io:AsyncRead`] + [`tokio::io::AsyncRead`] + `Unpin + Send + Sync`. This allows
-us to define the expected shared behavior of pluggable transports as a transform of these
+This library (currently) revolves around the abstraction of connections as
+anything that implement the traits [`AsyncRead`](tokio::io::AsyncRead) +
+[`AsyncWrite`](tokio::io::AsyncWrite) + `Unpin + Send + Sync`. This allows us to define the
+expected shared behavior of pluggable transports as a transform of these
 [`Stream`]s.
 
 ```rust ignore

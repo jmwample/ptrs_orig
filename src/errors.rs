@@ -3,8 +3,12 @@ use std::{fmt::Display, str::FromStr};
 use hex::FromHexError;
 use rcgen::RcgenError;
 
+/// Result type for pluggable transports returning [`Error`] or `T`
 pub type Result<T> = std::result::Result<T, Error>;
 
+/// Errors that can occur when using the transports, including wrapped from dependencies.
+///
+/// Errors that can occur when using the transports, including wrapped from dependencies.
 impl std::error::Error for Error {}
 #[derive(Debug)]
 pub enum Error {

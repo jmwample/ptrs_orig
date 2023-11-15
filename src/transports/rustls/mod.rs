@@ -203,13 +203,19 @@ impl Server {
 mod test {
     use super::*;
     use crate::Result;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio_util::sync::CancellationToken;
 
     #[tokio::test]
     async fn async_tls_rustls_read_write() -> Result<()> {
-        let (mut c, mut s) = tokio::io::duplex(128);
+        // let (mut c, mut s) = tokio::io::duplex(128);
+        let (mut c, mut s) = tokio::net::UnixStream::pair()?;
         let message = b"hello world asldkasda daweFAe0342323;l3 />?123";
         let config = Config::default();
         let server_config = config.clone();
+
+        let close = CancellationToken::new();
+        let close_s = close.clone();
 
         tokio::spawn(async move {
             let server = Server {
@@ -217,45 +223,36 @@ mod test {
             };
             let wrapped_server_conn = server.wrap(&mut s).await.unwrap();
 
+            println!("server wrap succeeded");
             let (mut reader, mut writer) = tokio::io::split(wrapped_server_conn);
-            let n = tokio::io::copy(&mut reader, &mut writer).await.unwrap();
-            assert_eq!(n, message.len() as u64);
-            // writer.flush().await.unwrap();
+            tokio::select! {
+                r = tokio::io::copy(&mut reader, &mut writer) => {
+                    assert_eq!(r.unwrap(), message.len() as u64);
+                }
+                _ = close_s.cancelled() => {}
+            }
+            writer.flush().await.unwrap();
         });
+        std::thread::sleep(std::time::Duration::from_millis(500));
 
         let client = Client { config };
-        let _wrapped_client_conn = client.wrap(&mut c).await?;
+        let mut wrapped_client_conn = client.wrap(&mut c).await?;
 
-        // tls.write_all(
-        // 	concat!(
-        // 		"GET / HTTP/1.1\r\n",
-        // 		"Host: www.rust-lang.org\r\n",
-        // 		"Connection: close\r\n",
-        // 		"Accept-Encoding: identity\r\n",
-        // 		"\r\n"
-        // 	)
-        // 	.as_bytes(),
-        // )
-        // .unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(500));
 
-        // let ciphersuite = tls
-        // 	.conn
-        // 	.negotiated_cipher_suite()
-        // 	.unwrap();
+        wrapped_client_conn.write_all(message).await?;
+        println!("\nclient write successful");
 
-        // writeln!(
-        // 	&mut std::io::stderr(),
-        // 	"Current ciphersuite: {:?}",
-        // 	ciphersuite.suite()
-        // )
-        // .unwrap();
+        let mut plaintext = Vec::with_capacity(128);
 
-        // let mut plaintext = Vec::new();
+        println!("client prepped to read");
+        wrapped_client_conn.read(&mut plaintext).await?;
+        println!("client read successful");
 
-        // tls.read_to_end(&mut plaintext).unwrap();
+		assert!(!plaintext.is_empty());
+        assert_eq!(message.to_vec(), plaintext);
 
-        // stdout().write_all(&plaintext).unwrap();
-
+        close.cancel();
         Ok(())
     }
 }
