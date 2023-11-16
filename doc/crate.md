@@ -33,6 +33,10 @@ expected shared behavior of pluggable transports as a transform of these
 [`Stream`]s.
 
 ```rust
+# use ptrs::{Result, Stream};
+# use tokio::io::{AsyncRead,AsyncWrite};
+# use futures::Future;
+# fn main() {}
 pub trait Transport<'a, A>
 where
     A: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'a,
@@ -47,22 +51,22 @@ Given this abstraction integrating transports into async rust applications becom
 straightforward, for example, integrating the identity transport (which performs a direct copy with
 no actual transform) could be done similar to:
 
-```rust
-use ptrs::{stream::Stream, StreamTransport, transports::identity};
-use tokio::net::TcpListener;
-
+```rust no_run
+# use std::io;
+# use ptrs::{stream::Stream, Transport, transports::identity};
+# use tokio::net::TcpListener;
 async fn process_socket<'s,S: Stream+'s>(stream: S) {
     // ...
 }
 
 #[tokio::main]
-async fn main() -> io::Result<()> {
+async fn main() -> ptrs::Result<()> {
     let listener = TcpListener::bind("127.0.0.1:8080").await?;
     let transport = identity::Identity::new();
 
     loop {
         let (tcp_socket, _) = listener.accept().await?;
-        let socket = transport.wrap(socket)?;
+        let socket = transport.wrap(tcp_socket).await?;
         process_socket(socket).await;
     }
     Ok(())
@@ -71,17 +75,17 @@ async fn main() -> io::Result<()> {
 
 Integration on the client side is similarly straightforward.
 
-```rust ignore
-use ptrs::{StreamTransport, transports::identity};
-use tokio::net::TcpStream;
-use tokio::io::AsyncWriteExt;
-use std::error::Error;
+```rust no_run
+# use tokio::net::TcpStream;
+# use tokio::io::{AsyncWriteExt,AsyncReadExt};
+# use std::error::Error;
+use ptrs::{Transport, transports::identity};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    let transport = identity::new();
+    let transport = identity::Identity::new();
     let mut tcp_stream = TcpStream::connect("127.0.0.1:8080").await?;
-    let mut stream = transport.wrap(tcp_stream)?;
+    let mut stream = transport.wrap(tcp_stream).await?;
 
     stream.write_all(b"hello world!").await?;
     stream.read(&mut [0; 128]).await?;
@@ -101,8 +105,18 @@ trait objects implementing the same abstraction is is possible to wrap multiple 
 one another. One reason to do this might be to have separate reliability, obfuscation and padding
 strategies that can be composed interchangeably.
 
-```rust no_run
-todo!()
+```rust
+# use tokio::io::duplex;
+use ptrs::{transports::identity::Identity, Transport};
+
+# #[tokio::main]
+# async fn main() -> ptrs::Result<()> {
+let (mut c, mut s) = duplex(128);
+let t1 = Identity::new();
+let t2 = Identity::new();
+let mut stream = t2.wrap(t1.wrap(c).await?).await?;
+# Ok(())
+# }
 ```
 
 ### Implementing a Transport

@@ -3,20 +3,22 @@ use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
 use crate::Result;
 
-/// Abstraction over I/O interfaces requiring only that they implements
-/// [AsyncRead], [AsyncWrite], and are safe to send between threads.
+/// Trait defining an abstract I/O object requiring only that the object implements
+/// [AsyncRead], [AsyncWrite], and is safe to send between threads.
 pub trait Stream: AsyncRead + AsyncWrite + Unpin + Send + Sync {}
 impl<T> Stream for T where T: AsyncRead + AsyncWrite + Unpin + Send + Sync {}
 
-/// Abstraction over I/O interfaces requiring only that they implements
-/// [AsyncRead] and are safe to send between threads. Generally used in context
-/// with a `split_*` or [`combine`] operation.
+/// Abstraction over I/O interfaces requiring only that the object implements
+/// [AsyncRead] and is safe to send between threads.
+///
+/// Generally used in context with a `split*` or [`combine`] operation.
 pub trait ReadHalf: AsyncRead + Unpin + Send + Sync {}
 impl<T> ReadHalf for T where T: AsyncRead + Unpin + Send + Sync {}
 
-/// Abstraction over I/O interfaces requiring only that they implements
-/// [AsyncWrite] and are safe to send between threads. Generally used in context
-/// with a `split_*` or [`combine`] operation.
+/// Abstraction over I/O interfaces requiring only that the object implements
+/// [AsyncWrite] and is safe to send between threads.
+///
+/// Generally used in context with a `split*` or [`combine`] operation.
 pub trait WriteHalf: AsyncWrite + Unpin + Send + Sync {}
 impl<T> WriteHalf for T where T: AsyncWrite + Unpin + Send + Sync {}
 
@@ -28,6 +30,7 @@ struct Combined<R, W> {
     w: W,
 }
 
+/// Combine one read half and one write half into a single duplex [`Stream`].
 pub fn combine<R, W>(r: R, w: W) -> impl Stream
 where
     R: AsyncRead + Unpin + Send + Sync,
@@ -74,14 +77,9 @@ impl<R, W: AsyncWrite> AsyncWrite for Combined<R, W> {
     }
 }
 
-
-
-pub fn split_stream<'s, S>(
-    s: S,
-) -> Result<(
-    Box<dyn ReadHalf + 's>,
-    Box<dyn WriteHalf + 's>,
-)>
+/// Split a [`Stream`] into its read and write halves returning boxed
+/// [`ReadHalf`] and [`WriteHalf`] trait objects.
+pub fn split_stream<'s, S>(s: S) -> Result<(Box<dyn ReadHalf + 's>, Box<dyn WriteHalf + 's>)>
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + Sync + 's,
 {
@@ -89,6 +87,8 @@ where
     Ok((Box::new(r), Box::new(w)))
 }
 
+/// Split a [`Stream`] into its read and write halves returning _impl trait_
+/// objects for [`AsyncRead`] and [`AsyncWrite`].
 pub fn split_impl<'s, S>(
     s: S,
 ) -> Result<(
@@ -102,7 +102,9 @@ where
     Ok((r, w))
 }
 
-pub fn split_box<'s, S>(
+/// Split a [`Stream`] into its read and write halves returning boxed
+/// [`AsyncRead`] and [`AsyncWrite`] trait objects.
+pub fn split<'s, S>(
     s: S,
 ) -> Result<(
     Box<dyn AsyncRead + Unpin + Send + Sync + 's>,
@@ -135,8 +137,8 @@ mod tests {
         test_split_read_write(&mut cr2, &mut cw2, &mut sr2, &mut sw2).await?;
 
         let (client, server) = UnixStream::pair()?;
-        let (mut cr3, mut cw3) = split_box(client)?;
-        let (mut sr3, mut sw3) = split_box(server)?;
+        let (mut cr3, mut cw3) = split(client)?;
+        let (mut sr3, mut sw3) = split(server)?;
         test_split_read_write(&mut cr3, &mut cw3, &mut sr3, &mut sw3).await?;
         Ok(())
     }

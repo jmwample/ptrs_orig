@@ -44,10 +44,10 @@ fn default_server_config_with_ca(
     cert_set: certs::SelfSignedSet,
 ) -> Result<Arc<rustls::ServerConfig>> {
     trace!("cert: {}", cert_set.ca.certificate.serialize_pem().unwrap());
-    trace!(
-        "key:{}",
-        cert_set.ca.certificate.serialize_private_key_pem()
-    );
+    // trace!(
+    //     "key:{}",
+    //     cert_set.ca.certificate.serialize_private_key_pem()
+    // );
 
     let mut cert_store = rustls::RootCertStore::empty();
 
@@ -195,6 +195,7 @@ impl Server {
             .ok_or(Error::Other("no server config provided".into()))?;
         let acceptor = TlsAcceptor::from(config);
         let stream = acceptor.accept(a).await?;
+        trace!("accepted stream");
         Ok(Box::new(stream))
     }
 }
@@ -204,13 +205,16 @@ mod test {
     use super::*;
     use crate::Result;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::time::{sleep, Duration};
     use tokio_util::sync::CancellationToken;
+    use tracing::debug;
 
     #[tokio::test]
     async fn async_tls_rustls_read_write() -> Result<()> {
-        // let (mut c, mut s) = tokio::io::duplex(128);
-        let (mut c, mut s) = tokio::net::UnixStream::pair()?;
-        let message = b"hello world asldkasda daweFAe0342323;l3 />?123";
+        let (mut c, mut s) = tokio::io::duplex(128);
+        // println!();
+
+        let message: &[u8; 46] = b"hello world asldkasda daweFAe0342323;l3 />?123";
         let config = Config::default();
         let server_config = config.clone();
 
@@ -221,9 +225,17 @@ mod test {
             let server = Server {
                 config: server_config,
             };
-            let wrapped_server_conn = server.wrap(&mut s).await.unwrap();
+            debug!("server prepared to wrap");
 
-            println!("server wrap succeeded");
+            let wrapped_server_conn = match server.wrap(&mut s).await {
+                Ok(s) => s,
+                Err(e) => {
+                    println!("server wrap failed: {}", e);
+                    return;
+                }
+            };
+
+            debug!("server wrap succeeded");
             let (mut reader, mut writer) = tokio::io::split(wrapped_server_conn);
             tokio::select! {
                 r = tokio::io::copy(&mut reader, &mut writer) => {
@@ -233,23 +245,24 @@ mod test {
             }
             writer.flush().await.unwrap();
         });
-        std::thread::sleep(std::time::Duration::from_millis(500));
+        sleep(Duration::from_millis(500)).await;
 
         let client = Client { config };
         let mut wrapped_client_conn = client.wrap(&mut c).await?;
 
-        std::thread::sleep(std::time::Duration::from_millis(500));
+        sleep(Duration::from_millis(500)).await;
 
         wrapped_client_conn.write_all(message).await?;
-        println!("\nclient write successful");
+        debug!("\nclient write successful");
+        sleep(Duration::from_millis(500)).await;
 
-        let mut plaintext = Vec::with_capacity(128);
+        let mut plaintext = vec![0u8; message.len()];
 
-        println!("client prepped to read");
-        wrapped_client_conn.read(&mut plaintext).await?;
-        println!("client read successful");
+        debug!("client prepped to read");
+        let nr = wrapped_client_conn.read_exact(&mut plaintext).await?;
+        debug!("client read successful: {nr}");
 
-		assert!(!plaintext.is_empty());
+        assert!(!plaintext.is_empty());
         assert_eq!(message.to_vec(), plaintext);
 
         close.cancel();

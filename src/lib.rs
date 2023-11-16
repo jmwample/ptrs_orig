@@ -1,5 +1,5 @@
 #![feature(trait_alias)]
-#![doc = include_str!("../README.md")]
+#![doc = include_str!("../doc/crate.md")]
 
 mod errors;
 mod other_copy;
@@ -15,9 +15,9 @@ pub use errors::{Error, Result};
 /// threads.
 ///
 /// Streams can be split into separate read and write halves using one of the
-/// `split_*` methods ([split_stream](crate::stream::split_stream),
+/// `split*` functions ([split_stream](crate::stream::split_stream),
 /// [split_impl](crate::stream::split_impl),
-/// [split_box](crate::stream::split_box)). The halves can then be combined back
+/// [split](crate::stream::split)). The halves can then be combined back
 /// into a single stream using [combine](crate::stream::combine).
 ///
 /// ```

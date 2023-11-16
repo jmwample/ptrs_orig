@@ -1,8 +1,8 @@
 //! # PT
 //!
 
-use crate::{Named, Configurable, TryConfigure, Result, Error};
 pub use crate::pt::{copy::DuplexTransform, transform::BufferTransform, wrap::WrapTransport};
+use crate::{Configurable, Error, Named, Result, TryConfigure};
 
 use tokio::io::{AsyncRead, AsyncWrite};
 
@@ -16,7 +16,6 @@ pub mod transform;
 
 /// Wrapper based pluggable transports construction tools.
 pub mod wrap;
-
 
 mod conversion;
 pub use conversion::*;
@@ -90,7 +89,6 @@ where
 {
 }
 
-
 /// Copies data in one direction from `a -> b`, reading into buffer and applying the transform as it goes.
 ///
 /// This function returns a future that will read from both streams,
@@ -132,8 +130,7 @@ where
     B: AsyncRead + AsyncWrite + Unpin + Clone + ?Sized + 'a,
     T: Transform<'a, A, B> + 'a,
 {
-    let _duplex: Box<dyn DuplexTransform<A, B>> =
-        copy::duplex_from_transform_buffer(transform)?;
+    let _duplex: Box<dyn DuplexTransform<A, B>> = copy::duplex_from_transform_buffer(transform)?;
     Err(Error::Other("not implemented yet".into()))
 }
 
