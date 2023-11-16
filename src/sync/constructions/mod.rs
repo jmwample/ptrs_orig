@@ -12,8 +12,8 @@ use crate::Named;
 pub struct PlainTransport {}
 
 impl Named for PlainTransport {
-    fn name(&self) -> &'static str {
-        "identity"
+    fn name(&self) -> String {
+        "identity".into()
     }
 }
 

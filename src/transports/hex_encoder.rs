@@ -130,14 +130,14 @@ impl From<HexEncoder> for Box<dyn StreamHandler> {
 }
 
 impl Named for HexEncoder {
-    fn name(&self) -> &'static str {
-        "hex"
+    fn name(&self) -> String {
+        String::from(NAME)
     }
 }
 
 impl Named for &HexEncoder {
-    fn name(&self) -> &'static str {
-        NAME
+    fn name(&self) -> String {
+        String::from(NAME)
     }
 }
 

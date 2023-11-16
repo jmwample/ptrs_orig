@@ -25,8 +25,8 @@ impl Http {
 }
 
 impl Named for Http {
-    fn name(&self) -> &'static str {
-        "identity"
+    fn name(&self) -> String {
+        "identity".into()
     }
 }
 
@@ -122,7 +122,9 @@ mod test {
     ///
     #[tokio::test]
     async fn wrap_transport() {
-        let (sealer, revealer) = Http::default().wrapper().unwrap();
+        let wrapper = Http::default().sealer().unwrap();
+        let sealer = wrapper.seal;
+        let revealer = wrapper.reveal;
         let (mut client, mut server) = tokio::net::UnixStream::pair().unwrap();
 
         let server_task = tokio::spawn(async move {

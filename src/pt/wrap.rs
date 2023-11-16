@@ -1,5 +1,6 @@
-use crate::Result;
+use crate::{stream::combine, Named, Result, Stream, Transport};
 
+use futures::Future;
 use tokio::io::{AsyncRead, AsyncWrite};
 
 pub trait Reveal {
@@ -15,20 +16,44 @@ pub trait Seal {
         w: Box<dyn AsyncWrite + Unpin + Send + Sync + 'a>,
     ) -> Box<dyn AsyncWrite + Unpin + Send + Sync + 'a>;
 }
-pub trait WrapTransport {
-    fn wrapper(
-        &self,
-    ) -> Result<(
-        Box<dyn Seal + Unpin + Send + Sync>,
-        Box<dyn Reveal + Unpin + Send + Sync>,
-    )>;
 
-    fn unwrapper(
-        &self,
-    ) -> Result<(
-        Box<dyn Seal + Unpin + Send + Sync>,
-        Box<dyn Reveal + Unpin + Send + Sync>,
-    )>;
+pub trait WrapTransport {
+    fn sealer(&self) -> Result<Wrapper>;
+
+    fn revealer(&self) -> Result<Wrapper>;
+}
+
+pub struct Wrapper {
+    pub name: &'static str,
+    pub seal: Box<dyn Seal + Unpin + Send + Sync>,
+    pub reveal: Box<dyn Reveal + Unpin + Send + Sync>,
+}
+
+impl Wrapper {
+    async fn wrap<'a, A>(&self, a: A) -> Result<Box<dyn Stream + 'a>>
+    where
+        A: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'a,
+    {
+        let (r1, w1) = tokio::io::split(a);
+        let r_prime = self.reveal.reveal(Box::new(r1)); // seal outgoing stream
+        let w_prime = self.seal.seal(Box::new(w1)); // reveal incoming stream
+        Ok(Box::new(combine(r_prime, w_prime)))
+    }
+}
+impl Named for Wrapper {
+    fn name(&self) -> String {
+        String::from(self.name)
+    }
+}
+
+// #[async_trait]
+impl<'a, A> Transport<'a, A> for Wrapper
+where
+    A: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'a,
+{
+    fn wrap(&self, a: A) -> impl Future<Output = Result<Box<dyn Stream + 'a>>> {
+        self.wrap(a)
+    }
 }
 
 #[cfg(test)]

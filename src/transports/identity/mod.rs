@@ -1,9 +1,7 @@
 use crate::pt::copy::*;
-use crate::{
-    Configurable, Named, Result, Role, Stream, Transport, TransportBuilder, TransportInstance,
-};
+use crate::{Configurable, Named, Result, Stream, Transport, TryConfigure};
 
-use futures::ready;
+use futures::{ready, Future};
 use tokio::io::{AsyncRead, AsyncWrite};
 
 use std::io;
@@ -14,24 +12,32 @@ mod duplex;
 mod simplex;
 mod wrap;
 
+/// Identity transport applying no transform and passing bytes unchanged.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Identity {}
 
-impl TransportBuilder for Identity {
-    fn build(&self, _r: &Role) -> Result<TransportInstance> {
-        Ok(TransportInstance::new(Box::new(Identity::new())))
-    }
-}
+// impl TransportBuilder for Identity {
+//     fn build(&self, _r: &Role) -> Result<TransportInstance> {
+//         Ok(TransportInstance::new(Box::new(Identity::new())))
+//     }
+// }
 
 impl Identity {
     pub fn new() -> Self {
         Identity {}
     }
+
+    async fn wrap_inner<'a, A>(&self, a: A) -> Result<Box<dyn Stream + 'a>>
+    where
+        A: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'a,
+    {
+        Ok(Box::new(a))
+    }
 }
 
 impl Named for Identity {
-    fn name(&self) -> &'static str {
-        "identity"
+    fn name(&self) -> String {
+        "identity".into()
     }
 }
 
@@ -41,12 +47,18 @@ impl Configurable for Identity {
     }
 }
 
+impl TryConfigure for Identity {
+    fn set_config(&mut self, _config: &str) -> Result<()> {
+        Ok(())
+    }
+}
+
 impl<'a, A> Transport<'a, A> for Identity
 where
     A: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'a,
 {
-    fn wrap(&self, a: A) -> Result<Box<dyn Stream + 'a>> {
-        Ok(Box::new(a))
+    fn wrap(&self, a: A) -> impl Future<Output = Result<Box<dyn Stream + 'a>>> {
+        self.wrap_inner(a)
     }
 }
 
@@ -137,7 +149,9 @@ mod test {
     ///
     #[tokio::test]
     async fn wrap_transport() {
-        let (sealer, revealer) = Identity::default().wrapper().unwrap();
+        let wrapper = Identity::default().sealer().unwrap();
+        let revealer = wrapper.reveal;
+        let sealer = wrapper.seal;
         let (mut client, mut server) = tokio::net::UnixStream::pair().unwrap();
 
         let server_task = tokio::spawn(async move {

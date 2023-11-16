@@ -1,35 +1,107 @@
 #![feature(trait_alias)]
-#![doc = include_str!("../README.md")]
+#![doc = include_str!("../doc/crate.md")]
 
 mod errors;
 mod other_copy;
 
 pub use errors::{Error, Result};
 
+/// Tools and abstractions for I/O such that they can be used interchangeably.
+///
+/// # Stream I/O Abstractions and Operations
+///
+/// The `Stream` trait is an abstraction over I/O interfaces requiring only that
+/// they implements [AsyncRead], [AsyncWrite], and are safe to send between
+/// threads.
+///
+/// Streams can be split into separate read and write halves using one of the
+/// `split*` functions ([split_stream](crate::stream::split_stream),
+/// [split_impl](crate::stream::split_impl),
+/// [split](crate::stream::split)). The halves can then be combined back
+/// into a single stream using [combine](crate::stream::combine).
+///
+/// ```
+/// # use tokio::io::{duplex,AsyncWriteExt};
+/// # use ptrs::stream::split_stream;
+/// # #[tokio::main]
+/// # async fn main() -> ptrs::Result<()> {
+/// let (a, mut b) = duplex(128);
+/// let (mut ra, mut wa) = split_stream(a)?;
+/// # tokio::spawn(async move {
+/// #     std::thread::sleep(std::time::Duration::from_millis(100));
+/// #     b.write_all(b"hello world").await.unwrap();
+/// #     drop(b);
+/// # });
+/// let res = tokio::io::copy(&mut ra,&mut wa).await;
+/// # Ok(())
+/// # }
+/// ```
+///
+/// Unlike `tokio::io::ReadHalf.unsplit()`, [combine](crate::stream::combine)
+/// does not require that the halves originated from the same original object.
+///
+/// ```
+/// # use tokio::io::duplex;
+/// # use ptrs::stream::{split_stream,combine};
+/// # #[tokio::main]
+/// # async fn main() -> ptrs::Result<()> {
+/// let (a, b) = duplex(128);
+/// let (ra, wa) = split_stream(a)?;
+/// let (rb, wb) = split_stream(b)?;
+/// let x = combine(ra, wb);
+/// let y = combine(rb, wa);
+/// # Ok(())
+/// # }
+/// ```
 pub mod stream;
+
+/// [UNDER CONSTRUCTION] Synchronous versions of the pluggable transport interface constructions.
 pub mod sync;
+
+/// Example transport used for motivating features in the pluggable transport interface.
 pub mod transports;
 
-mod pt;
-pub use pt::*;
-pub use pt::{copy::DuplexTransform, transform::BufferTransform, wrap::WrapTransport};
+/// Pluggable transport interface constructions.
+pub mod pt;
+pub use pt::{copy, transform, wrap};
+
 pub use stream::Stream;
 
 #[cfg(test)]
 pub(crate) mod test_utils;
 
+use futures::Future;
 use tokio::io::{AsyncRead, AsyncWrite};
 
+/// A trait indicating that an object has a name in the transport context.
 pub trait Named {
-    fn name(&self) -> &'static str;
+    fn name(&self) -> String;
+}
+impl Named for Box<dyn Named> {
+    fn name(&self) -> String {
+        self.as_ref().name()
+    }
+}
+impl Named for &'_ dyn Named {
+    fn name(&self) -> String {
+        (*self).name()
+    }
 }
 
+/// Builder pattern trait indicating that a type can be configured with a string.
 pub trait Configurable {
     fn with_config(self, args: &str) -> Result<Self>
     where
         Self: Sized;
 }
 
+/// Mutator trait indicating that a type can be configured with a string.
+pub trait TryConfigure {
+    fn set_config(&mut self, args: &str) -> Result<()>;
+}
+
+/// Directional indicators for pluggable transport builders
+#[derive(Clone, PartialEq)]
 pub enum Role {
     /// Plaintext -> Ciphertext transformation
     Sealer,
@@ -38,10 +110,6 @@ pub enum Role {
     Revealer,
 }
 
-pub trait TransportBuilder: Named + Configurable {
-    fn build(&self, r: &Role) -> Result<TransportInstance>;
-}
-
 /// Copies data in both directions between `a` and `b`, encoding/decoding as it goes.
 ///
 /// This function returns a future that will read from both streams,
@@ -58,7 +126,7 @@ pub trait TransportBuilder: Named + Configurable {
 /// it will return a tuple of the number of bytes copied from a to b
 /// and the number of bytes copied from b to a, in that order.
 ///
-/// [`shutdown()`]: crate::io::AsyncWriteExt::shutdown
+/// [`shutdown()`]: tokio::io::AsyncWriteExt::shutdown
 ///
 /// # Errors
 ///
@@ -69,238 +137,64 @@ pub trait TransportBuilder: Named + Configurable {
 /// # Return value
 ///
 /// Returns a tuple of bytes copied `a` to `b` and bytes copied `b` to `a`.
-pub trait Transport<'a, A>
+pub trait Transport<'a, A>: Named
 where
     A: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'a,
 {
-    fn wrap(&self, a: A) -> Result<Box<dyn Stream + 'a>>;
+    fn wrap(&self, a: A) -> impl Future<Output = Result<Box<dyn Stream + 'a>>>;
 }
 
-pub struct TransportInstance {
-    inner: Box<dyn for<'a> Transport<'a, Box<dyn Stream + 'a>> + Send + Sync>,
-}
-impl TransportInstance {
-    fn new(inner: Box<dyn for<'a> Transport<'a, Box<dyn Stream + 'a>> + Send + Sync>) -> Self {
-        Self { inner }
-    }
-}
-
-impl<'a, A> Transport<'a, A> for TransportInstance
+pub trait TransportInst<'a, A>: Named + TryConfigure + Transport<'a, A>
 where
     A: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'a,
 {
-    fn wrap(&self, a: A) -> Result<Box<dyn Stream + 'a>> {
-        self.inner.wrap(Box::new(a))
-    }
 }
 
-/// Copies data in both directions between `a` and `b`, encoding/decoding as it goes.
-///
-/// This function returns a future that will read from both streams,
-/// writing any data read to the opposing stream.
-/// This happens in both directions concurrently.
-///
-/// If an EOF is observed on one stream, [`shutdown()`] will be invoked on
-/// the other, and reading from that stream will stop. Copying of data in
-/// the other direction will continue.
-///
-/// The future will complete successfully once both directions of communication has been shut down.
-/// A direction is shut down when the reader reports EOF,
-/// at which point [`shutdown()`] is called on the corresponding writer. When finished,
-/// it will return a tuple of the number of bytes copied from a to b
-/// and the number of bytes copied from b to a, in that order.
-///
-/// [`shutdown()`]: crate::io::AsyncWriteExt::shutdown
-///
-/// # Errors
-///
-/// The future will immediately return an error if any IO operation on `a`
-/// or `b` returns an error. Some data read from either stream may be lost (not
-/// written to the other stream) in this case.
-///
-/// # Return value
-///
-/// Returns a tuple of bytes copied `a` to `b` and bytes copied `b` to `a`.
-pub trait Wrapping: WrapTransport + Named + Configurable {}
-
-/// Copies data in one direction from `a` to `b`, applying the transform as it goes.
-///
-/// This function returns a future that will read from both streams,
-/// writing any data read to the opposing stream.
-/// This happens in both directions concurrently.
-///
-/// If an EOF is observed on one stream, [`shutdown()`] will be invoked on
-/// the other, and reading from that stream will stop. Copying of data in
-/// the other direction will continue.
-///
-/// The future will complete successfully once both directions of communication has been shut down.
-/// A direction is shut down when the reader reports EOF,
-/// at which point [`shutdown()`] is called on the corresponding writer. When finished,
-/// it will return a tuple of the number of bytes copied from a to b
-/// and the number of bytes copied from b to a, in that order.
-///
-/// [`shutdown()`]: crate::io::AsyncWriteExt::shutdown
-///
-/// # Errors
-///
-/// The future will immediately return an error if any IO operation on `a`
-/// or `b` returns an error. Some data read from either stream may be lost (not
-/// written to the other stream) in this case.
-///
-/// # Return value
-///
-/// Returns a count of bytes copied `a` to `b`.
-pub trait Duplex<A, B>: DuplexTransform<A, B> + Named + Configurable
+pub trait TransportBuilder<'a, S>
 where
-    A: AsyncRead + AsyncWrite + Unpin + ?Sized,
-    B: AsyncRead + AsyncWrite + Unpin + ?Sized,
+    S: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'a,
 {
+    fn build(&'a self, role: Role) -> impl Transport<'a, S> + Send + Sync + 'a;
 }
 
-/// Copies data in one direction from `a` to `b`, applying the transform as it goes.
-///
-/// This function returns a future that will read from both streams,
-/// writing any data read to the opposing stream.
-/// This happens in both directions concurrently.
-///
-/// If an EOF is observed on one stream, [`shutdown()`] will be invoked on
-/// the other, and reading from that stream will stop. Copying of data in
-/// the other direction will continue.
-///
-/// The future will complete successfully once both directions of communication has been shut down.
-/// A direction is shut down when the reader reports EOF,
-/// at which point [`shutdown()`] is called on the corresponding writer. When finished,
-/// it will return a tuple of the number of bytes copied from a to b
-/// and the number of bytes copied from b to a, in that order.
-///
-/// [`shutdown()`]: crate::io::AsyncWriteExt::shutdown
-///
-/// # Errors
-///
-/// The future will immediately return an error if any IO operation on `a`
-/// or `b` returns an error. Some data read from either stream may be lost (not
-/// written to the other stream) in this case.
-///
-/// # Return value
-///
-/// Returns a count of bytes copied `a` to `b`.
-pub trait Transform<'a, R, W>: BufferTransform<'a, R, W> + Named + Configurable
-where
-    R: AsyncRead + Clone + ?Sized + 'a,
-    W: AsyncWrite + Clone + ?Sized + 'a,
-{
-}
+// pub struct TransportInstance {
+//     pub inner: Box<dyn for<'a> Transport<'a, Box<dyn Stream + 'a>> + Send + Sync>,
+//     //    inner: Box<dyn for<'a> TransportInst<'a, Box<dyn Stream + 'a>> + Send + Sync>,
 
-pub fn duplex_from_transform<'a, T, A, B>(transform: T) -> Result<Box<dyn Duplex<A, B>>>
-where
-    A: AsyncRead + AsyncWrite + Unpin + Clone + ?Sized + 'a,
-    B: AsyncRead + AsyncWrite + Unpin + Clone + ?Sized + 'a,
-    T: Transform<'a, A, B> + 'a,
-{
-    let _duplex: Box<dyn DuplexTransform<A, B>> =
-        pt::copy::duplex_from_transform_buffer(transform)?;
-    Err(Error::Other("not implemented yet".into()))
-}
+// }
 
-pub fn wrapping_from_transform<'a, T, R, W>(_transform: T) -> Result<Box<dyn Wrapping>>
-where
-    R: AsyncRead + Clone + ?Sized + 'a,
-    W: AsyncWrite + Clone + ?Sized + 'a,
-    T: Transform<'a, R, W>,
-{
-    Err(Error::Other("not implemented yet".into()))
-}
+// impl TransportInstance {
+//     // fn new(inner: Box<dyn for<'a> TransportInst<'a, Box<dyn Stream + 'a>> + Send + Sync>) -> Self {
+//     fn new(inner: Box<dyn for<'a> Transport<'a, Box<dyn Stream + 'a>> + Send + Sync>) -> Self {
+//         Self { inner }
+//     }
 
-pub fn split_stream<'s, S>(
-    s: S,
-) -> Result<(
-    Box<dyn stream::ReadHalf + 's>,
-    Box<dyn stream::WriteHalf + 's>,
-)>
-where
-    S: AsyncRead + AsyncWrite + Unpin + Send + Sync + 's,
-{
-    let (r, w) = tokio::io::split(s);
-    Ok((Box::new(r), Box::new(w)))
-}
+//     fn wrap_inner<'a, A>(&self, a: A) -> Result<Box<dyn Stream + 'a>>
+//     where
+//         A: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'a,
+//     {
+//         self.inner.wrap(Box::new(a))
+//     }
+// }
 
-pub fn split_impl<'s, S>(
-    s: S,
-) -> Result<(
-    impl AsyncRead + Unpin + Send + Sync + 's,
-    impl AsyncWrite + Unpin + Send + Sync + 's,
-)>
-where
-    S: AsyncRead + AsyncWrite + Unpin + Send + Sync + 's,
-{
-    let (r, w) = tokio::io::split(s);
-    Ok((r, w))
-}
+// impl Named for TransportInstance {
+//     fn name(&self) -> String {
+//         self.inner.name()
+//     }
+// }
 
-pub fn split_box<'s, S>(
-    s: S,
-) -> Result<(
-    Box<dyn AsyncRead + Unpin + Send + Sync + 's>,
-    Box<dyn AsyncWrite + Unpin + Send + Sync + 's>,
-)>
-where
-    S: AsyncRead + AsyncWrite + Unpin + Send + Sync + 's,
-{
-    let (r, w) = tokio::io::split(s);
-    Ok((Box::new(r), Box::new(w)))
-}
+// impl TryConfigure for TransportInstance {
+//     fn set_config(&mut self, args: &str) -> Result<()> {
+//         self.inner.set_config(args)?;
+//         Ok(())
+//     }
+// }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use tokio::io::{AsyncReadExt, AsyncWriteExt};
-    use tokio::net::UnixStream;
-
-    #[tokio::test]
-    async fn splits() -> Result<()> {
-        let (client, server) = UnixStream::pair()?;
-
-        let (mut cr1, mut cw1) = split_stream(client)?;
-        let (mut sr1, mut sw1) = split_stream(server)?;
-        test_split_read_write(&mut cr1, &mut cw1, &mut sr1, &mut sw1).await?;
-
-        let (client, server) = UnixStream::pair()?;
-        let (mut cr2, mut cw2) = split_impl(client)?;
-        let (mut sr2, mut sw2) = split_impl(server)?;
-        test_split_read_write(&mut cr2, &mut cw2, &mut sr2, &mut sw2).await?;
-
-        let (client, server) = UnixStream::pair()?;
-        let (mut cr3, mut cw3) = split_box(client)?;
-        let (mut sr3, mut sw3) = split_box(server)?;
-        test_split_read_write(&mut cr3, &mut cw3, &mut sr3, &mut sw3).await?;
-        Ok(())
-    }
-
-    async fn test_split_read_write<'a, R1, W1, R2, W2>(
-        mut cr: R1,
-        mut cw: W1,
-        mut sr: R2,
-        mut sw: W2,
-    ) -> Result<()>
-    where
-        R1: AsyncRead + Unpin + Send + Sync + 'a,
-        W1: AsyncWrite + Unpin + Send + Sync + 'a,
-        R2: AsyncRead + Unpin + Send + Sync + 'a,
-        W2: AsyncWrite + Unpin + Send + Sync + 'a,
-    {
-        let message = "hello world";
-
-        cw.write_all(message.as_bytes()).await?;
-        let mut buf = [0; 11];
-        sr.read_exact(&mut buf).await?;
-        assert_eq!(buf, message.as_bytes());
-
-        let message = "goodbye";
-        sw.write_all(message.as_bytes()).await?;
-        let mut buf = [0; 7];
-        cr.read_exact(&mut buf).await?;
-        assert_eq!(buf, message.as_bytes());
-
-        Ok(())
-    }
-}
+// impl<'a, A> Transport<'a, A> for TransportInstance
+// where
+//     A: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'a,
+// {
+//     fn wrap(&self, a: A) -> impl Future<Output=Result<Box<dyn Stream + 'a>>> {
+//         self.wrap_inner(a)
+//     }
+// }

@@ -1,9 +1,18 @@
 // use crate::pt::{stream::Transform, Transport};
 
-use crate::{stream::Stream, Configurable, Named, Result, Transport};
+use crate::{
+    stream::Stream,
+    Configurable,
+    Named,
+    Result,
+    Transport,
+    TryConfigure,
+    // TransportBuilder, TransportInstance, Role,
+};
 
 use std::io::{BufReader, Read, Write};
 
+use futures::Future;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite};
 
 pub const NAME: &str = "reverse";
@@ -15,11 +24,18 @@ impl Reverse {
     pub fn new() -> Self {
         Reverse {}
     }
+
+    async fn wrap_inner<'a, A>(&self, a: A) -> Result<Box<dyn Stream + 'a>>
+    where
+        A: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'a,
+    {
+        Ok(Box::new(a))
+    }
 }
 
 impl Named for Reverse {
-    fn name(&self) -> &'static str {
-        NAME
+    fn name(&self) -> String {
+        String::from(NAME)
     }
 }
 
@@ -55,14 +71,42 @@ pub fn reverse_sync(incoming: &mut dyn Read, outgoing: &mut dyn Write) -> Result
     Ok(nw as u64)
 }
 
+// #[async_trait]
 impl<'a, A> Transport<'a, A> for Reverse
 where
     A: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'a,
 {
-    fn wrap(&self, a: A) -> Result<Box<dyn Stream + 'a>> {
-        Ok(Box::new(a))
+    fn wrap(&self, a: A) -> impl Future<Output = Result<Box<dyn Stream + 'a>>> {
+        self.wrap_inner(a)
     }
 }
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Builder {}
+
+impl Named for Builder {
+    fn name(&self) -> String {
+        String::from(NAME)
+    }
+}
+
+impl Configurable for Builder {
+    fn with_config(self, _config: &str) -> Result<Self> {
+        Ok(self)
+    }
+}
+
+impl TryConfigure for Reverse {
+    fn set_config(&mut self, _config: &str) -> Result<()> {
+        Ok(())
+    }
+}
+
+// impl TransportBuilder for Builder {
+//     fn build(&self, _r: &Role) -> Result<TransportInstance> {
+//         Ok(TransportInstance::new(Box::new(Reverse::new())))
+//     }
+// }
 
 #[cfg(test)]
 mod test {

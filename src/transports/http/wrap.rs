@@ -22,21 +22,19 @@ impl Reveal for Http {
 }
 
 impl WrapTransport for Http {
-    fn wrapper(
-        &self,
-    ) -> Result<(
-        Box<dyn Seal + Unpin + Send + Sync>,
-        Box<dyn Reveal + Unpin + Send + Sync>,
-    )> {
-        Ok((Box::new(*self), Box::new(*self)))
+    fn sealer(&self) -> Result<Wrapper> {
+        Ok(Wrapper {
+            seal: Box::new(*self),
+            reveal: Box::new(*self),
+            name: "http",
+        })
     }
 
-    fn unwrapper(
-        &self,
-    ) -> Result<(
-        Box<dyn Seal + Unpin + Send + Sync>,
-        Box<dyn Reveal + Unpin + Send + Sync>,
-    )> {
-        Ok((Box::new(*self), Box::new(*self)))
+    fn revealer(&self) -> Result<Wrapper> {
+        Ok(Wrapper {
+            seal: Box::new(*self),
+            reveal: Box::new(*self),
+            name: "http",
+        })
     }
 }

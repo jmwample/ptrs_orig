@@ -1,24 +1,33 @@
 use std::{fmt::Display, str::FromStr};
 
 use hex::FromHexError;
+use rcgen::RcgenError;
 
+/// Result type for pluggable transports returning [`Error`] or `T`
 pub type Result<T> = std::result::Result<T, Error>;
 
+/// Errors that can occur when using the transports, including wrapped from dependencies.
+///
+/// Errors that can occur when using the transports, including wrapped from dependencies.
 impl std::error::Error for Error {}
 #[derive(Debug)]
 pub enum Error {
-    Other(Box<dyn std::error::Error>),
+    Other(Box<dyn std::error::Error + Send + Sync>),
     IOError(std::io::Error),
-    EncodeError(Box<dyn std::error::Error>),
+    EncodeError(Box<dyn std::error::Error + Send + Sync>),
+    CertGenError(RcgenError),
     NullTransport,
+    Cancelled,
 }
 
 impl Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self {
+            Error::Cancelled => write!(f, "cancelled"),
             Error::Other(e) => write!(f, "{}", e),
             Error::IOError(e) => write!(f, "{}", e),
             Error::EncodeError(e) => write!(f, "{}", e),
+            Error::CertGenError(e) => write!(f, "{}", e),
             Error::NullTransport => write!(f, "NullTransport"),
         }
     }
@@ -27,7 +36,7 @@ impl Display for Error {
 unsafe impl Send for Error {}
 
 impl Error {
-    pub fn new<T: Into<Box<dyn std::error::Error>>>(e: T) -> Self {
+    pub fn new<T: Into<Box<dyn std::error::Error + Send + Sync>>>(e: T) -> Self {
         Error::Other(e.into())
     }
 }
@@ -58,9 +67,15 @@ impl From<FromHexError> for Error {
     }
 }
 
-impl From<Box<dyn std::error::Error>> for Error {
-    fn from(e: Box<dyn std::error::Error>) -> Self {
+impl From<Box<dyn std::error::Error + Send + Sync>> for Error {
+    fn from(e: Box<dyn std::error::Error + Send + Sync>) -> Self {
         Error::Other(e)
+    }
+}
+
+impl From<RcgenError> for Error {
+    fn from(e: RcgenError) -> Self {
+        Error::CertGenError(e)
     }
 }
 

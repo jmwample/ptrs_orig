@@ -1,3 +1,9 @@
+//!
+//! # Proxy
+//!
+//! Client and Server command line interface (CLI) for testing pluggable transports.
+//!
+
 mod config;
 mod handler;
 mod pt;

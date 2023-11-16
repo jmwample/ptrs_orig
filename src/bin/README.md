@@ -1,8 +1,6 @@
 
 # Pluggable Transports in Rust (PTRS)
 
-[![License](https://img.shields.io/github/license/jmwample/ptrs)](https://github.com/jmwample/ptrs/blob/main/LICENSE) [![Build Status](https://github.com/jmwample/ptrs/actions/workflows/rust.yml/badge.svg?branch=main)](https://github.com/jmwample/ptrs/actions/workflows/rust.yml)
-
 PTRS is a library for writing pluggable transports in Rust.
 
 ## Example CLI
