@@ -1,4 +1,4 @@
-use crate::{Error, Result, Stream, Transport};
+use crate::{Error, Named, Result, Stream, Transport};
 
 use futures::Future;
 use rustls_pemfile::{certs, pkcs8_private_keys};
@@ -135,6 +135,12 @@ struct Client {
     config: Config,
 }
 
+impl Named for Client {
+    fn name(&self) -> String {
+        "rustls_client".into()
+    }
+}
+
 impl Client {
     fn _from_config(c: Option<&Config>) -> Self {
         let config = match c {
@@ -171,6 +177,12 @@ where
 
 struct Server {
     config: Config,
+}
+
+impl Named for Server {
+    fn name(&self) -> String {
+        "rustls_server".into()
+    }
 }
 
 // #[async_trait]

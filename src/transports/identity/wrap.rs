@@ -27,6 +27,7 @@ impl WrapTransport for Identity {
         Ok(Wrapper {
             seal: Box::new(*self),
             reveal: Box::new(*self),
+            name: "identity",
         })
     }
 
@@ -34,6 +35,7 @@ impl WrapTransport for Identity {
         Ok(Wrapper {
             seal: Box::new(*self),
             reveal: Box::new(*self),
+            name: "identity",
         })
     }
 }

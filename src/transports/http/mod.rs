@@ -25,8 +25,8 @@ impl Http {
 }
 
 impl Named for Http {
-    fn name(&self) -> &'static str {
-        "identity"
+    fn name(&self) -> String {
+        "identity".into()
     }
 }
 

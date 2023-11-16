@@ -75,15 +75,15 @@ use tokio::io::{AsyncRead, AsyncWrite};
 
 /// A trait indicating that an object has a name in the transport context.
 pub trait Named {
-    fn name(&self) -> &'static str;
+    fn name(&self) -> String;
 }
 impl Named for Box<dyn Named> {
-    fn name(&self) -> &'static str {
+    fn name(&self) -> String {
         self.as_ref().name()
     }
 }
 impl Named for &'_ dyn Named {
-    fn name(&self) -> &'static str {
+    fn name(&self) -> String {
         (*self).name()
     }
 }
@@ -137,7 +137,7 @@ pub enum Role {
 /// # Return value
 ///
 /// Returns a tuple of bytes copied `a` to `b` and bytes copied `b` to `a`.
-pub trait Transport<'a, A>
+pub trait Transport<'a, A>: Named
 where
     A: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'a,
 {
@@ -150,20 +150,35 @@ where
 {
 }
 
+pub trait TransportBuilder<'a, S>
+where
+    S: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'a,
+{
+    fn build(&'a self, role: Role) -> impl Transport<'a, S> + Send + Sync + 'a;
+}
+
 // pub struct TransportInstance {
-//     inner: Box<dyn for<'a> Transport<'a, Box<dyn Stream + 'a>> + Send + Sync>,
+//     pub inner: Box<dyn for<'a> Transport<'a, Box<dyn Stream + 'a>> + Send + Sync>,
 //     //    inner: Box<dyn for<'a> TransportInst<'a, Box<dyn Stream + 'a>> + Send + Sync>,
 
 // }
+
 // impl TransportInstance {
 //     // fn new(inner: Box<dyn for<'a> TransportInst<'a, Box<dyn Stream + 'a>> + Send + Sync>) -> Self {
 //     fn new(inner: Box<dyn for<'a> Transport<'a, Box<dyn Stream + 'a>> + Send + Sync>) -> Self {
 //         Self { inner }
 //     }
+
+//     fn wrap_inner<'a, A>(&self, a: A) -> Result<Box<dyn Stream + 'a>>
+//     where
+//         A: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'a,
+//     {
+//         self.inner.wrap(Box::new(a))
+//     }
 // }
 
 // impl Named for TransportInstance {
-//     fn name(&self) -> &'static str {
+//     fn name(&self) -> String {
 //         self.inner.name()
 //     }
 // }
@@ -174,12 +189,12 @@ where
 //         Ok(())
 //     }
 // }
-// #[async_trait]
+
 // impl<'a, A> Transport<'a, A> for TransportInstance
 // where
 //     A: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'a,
 // {
-//     async fn wrap(&self, a: A) -> Result<Box<dyn Stream + 'a>> {
-//         self.inner.wrap(Box::new(a))
+//     fn wrap(&self, a: A) -> impl Future<Output=Result<Box<dyn Stream + 'a>>> {
+//         self.wrap_inner(a)
 //     }
 // }

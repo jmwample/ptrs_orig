@@ -120,7 +120,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tokio::io::{AsyncReadExt, AsyncWriteExt, duplex};
+    use tokio::io::{duplex, AsyncReadExt, AsyncWriteExt};
     use tokio::net::UnixStream;
 
     #[tokio::test]
@@ -175,7 +175,6 @@ mod tests {
     async fn split_combine() -> Result<()> {
         let message = b"lawenaj0 ;q3d23Q#$FQeoifq nefq3dq23qd/;m qw;ojqweqwjnqq qdq23q";
         let (client, server) = duplex(128);
-
 
         tokio::spawn(async move {
             let (mut r, mut w) = split_stream(server).unwrap();

@@ -27,8 +27,8 @@ pub struct Base64Builder {
 
 // impl Transport for Base64Builder {}
 impl Named for Base64Builder {
-    fn name(&self) -> &'static str {
-        NAME
+    fn name(&self) -> String {
+        String::from(NAME)
     }
 }
 impl Configurable for Base64Builder {
@@ -48,8 +48,8 @@ impl Configurable for Base64Builder {
 // }
 
 impl Named for Base64 {
-    fn name(&self) -> &'static str {
-        NAME
+    fn name(&self) -> String {
+        String::from(NAME)
     }
 }
 
@@ -75,13 +75,21 @@ impl WrapTransport for Base64Builder {
     fn sealer(&self) -> Result<Wrapper> {
         let seal = self.build_seal()?;
         let reveal = self.build_reveal()?;
-        Ok(Wrapper { seal, reveal })
+        Ok(Wrapper {
+            seal,
+            reveal,
+            name: "base64",
+        })
     }
 
     fn revealer(&self) -> Result<Wrapper> {
         let seal = self.build_seal()?;
         let reveal = self.build_reveal()?;
-        Ok(Wrapper { seal, reveal })
+        Ok(Wrapper {
+            seal,
+            reveal,
+            name: "base64",
+        })
     }
 }
 

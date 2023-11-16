@@ -26,6 +26,7 @@ impl WrapTransport for Http {
         Ok(Wrapper {
             seal: Box::new(*self),
             reveal: Box::new(*self),
+            name: "http",
         })
     }
 
@@ -33,6 +34,7 @@ impl WrapTransport for Http {
         Ok(Wrapper {
             seal: Box::new(*self),
             reveal: Box::new(*self),
+            name: "http",
         })
     }
 }

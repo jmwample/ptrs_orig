@@ -34,8 +34,8 @@ impl Reverse {
 }
 
 impl Named for Reverse {
-    fn name(&self) -> &'static str {
-        NAME
+    fn name(&self) -> String {
+        String::from(NAME)
     }
 }
 
@@ -85,8 +85,8 @@ where
 pub struct Builder {}
 
 impl Named for Builder {
-    fn name(&self) -> &'static str {
-        NAME
+    fn name(&self) -> String {
+        String::from(NAME)
     }
 }
 

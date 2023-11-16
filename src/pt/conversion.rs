@@ -2,7 +2,8 @@ use crate::{
     // pt::transform::{BufferTransform, ReadTransform, WriteTransform},
     pt::transform::BufferTransform,
     stream::{combine, Stream},
-    Result, //Role, TransportInst, TransportBuilder,
+    Named, //Role, TransportInst, TransportBuilder,
+    Result,
     // pt::Wrapping,
     // wrap::WrapTransport,
     Transport,
@@ -11,7 +12,7 @@ use crate::{
 use tokio::io::{split, AsyncRead, AsyncWrite};
 
 /// Build a transport from a pair of transforms
-pub fn from_transforms<'a, T1, T2, A, B>(t1: T1, t2: T2) -> impl Transport<'a, A>
+pub fn from_transforms<'a, T1, T2, A, B>(t1: T1, t2: T2, name: String) -> impl Transport<'a, A>
 where
     A: AsyncRead + AsyncWrite + Clone + Unpin + Send + Sync + 'a,
     B: AsyncRead + AsyncWrite + Clone + Unpin + Send + Sync + 'a,
@@ -21,6 +22,7 @@ where
     FromTransforms {
         t1: Box::new(t1),
         t2: Box::new(t2),
+        name,
     }
 }
 
@@ -33,6 +35,19 @@ where
 {
     t1: Box<dyn BufferTransform<'a, R1, W1> + 'a>,
     t2: Box<dyn BufferTransform<'a, R2, W2> + 'a>,
+    name: String,
+}
+
+impl<'a, R1, R2, W1, W2> Named for FromTransforms<'a, R1, R2, W1, W2>
+where
+    R1: AsyncRead + Unpin + Send + Sync + 'a,
+    R2: AsyncRead + Unpin + Send + Sync + 'a,
+    W1: AsyncWrite + Unpin + Send + Sync + 'a,
+    W2: AsyncWrite + Unpin + Send + Sync + 'a,
+{
+    fn name(&self) -> String {
+        self.name.clone()
+    }
 }
 
 // #[async_trait]

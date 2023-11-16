@@ -50,7 +50,7 @@ pub use conversion::*;
 /// Returns a tuple of bytes copied `a` to `b` and bytes copied `b` to `a`.
 pub trait Wrapping: WrapTransport + Named + TryConfigure {}
 impl Named for Box<dyn Wrapping> {
-    fn name(&self) -> &'static str {
+    fn name(&self) -> String {
         self.as_ref().name()
     }
 }

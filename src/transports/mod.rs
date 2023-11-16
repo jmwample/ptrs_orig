@@ -81,8 +81,8 @@ where
     }
 }
 impl Named for NullTransport {
-    fn name(&self) -> &'static str {
-        "null"
+    fn name(&self) -> String {
+        "null".into()
     }
 }
 impl TryConfigure for NullTransport {

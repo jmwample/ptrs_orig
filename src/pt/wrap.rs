@@ -1,4 +1,4 @@
-use crate::{stream::combine, Result, Stream, Transport};
+use crate::{stream::combine, Named, Result, Stream, Transport};
 
 use futures::Future;
 use tokio::io::{AsyncRead, AsyncWrite};
@@ -24,6 +24,7 @@ pub trait WrapTransport {
 }
 
 pub struct Wrapper {
+    pub name: &'static str,
     pub seal: Box<dyn Seal + Unpin + Send + Sync>,
     pub reveal: Box<dyn Reveal + Unpin + Send + Sync>,
 }
@@ -37,6 +38,11 @@ impl Wrapper {
         let r_prime = self.reveal.reveal(Box::new(r1)); // seal outgoing stream
         let w_prime = self.seal.seal(Box::new(w1)); // reveal incoming stream
         Ok(Box::new(combine(r_prime, w_prime)))
+    }
+}
+impl Named for Wrapper {
+    fn name(&self) -> String {
+        String::from(self.name)
     }
 }
 

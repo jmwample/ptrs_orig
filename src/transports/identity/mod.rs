@@ -36,8 +36,8 @@ impl Identity {
 }
 
 impl Named for Identity {
-    fn name(&self) -> &'static str {
-        "identity"
+    fn name(&self) -> String {
+        "identity".into()
     }
 }
 
