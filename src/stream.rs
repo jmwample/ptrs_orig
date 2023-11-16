@@ -120,7 +120,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::io::{AsyncReadExt, AsyncWriteExt, duplex};
     use tokio::net::UnixStream;
 
     #[tokio::test]
@@ -167,6 +167,31 @@ mod tests {
         let mut buf = [0; 7];
         cr.read_exact(&mut buf).await?;
         assert_eq!(buf, message.as_bytes());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn split_combine() -> Result<()> {
+        let message = b"lawenaj0 ;q3d23Q#$FQeoifq nefq3dq23qd/;m qw;ojqweqwjnqq qdq23q";
+        let (client, server) = duplex(128);
+
+
+        tokio::spawn(async move {
+            let (mut r, mut w) = split_stream(server).unwrap();
+            tokio::io::copy(&mut r, &mut w).await.unwrap();
+        });
+
+        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+        let (cr, cw) = split_stream(client).unwrap();
+        let mut combined_client = combine(cr, cw);
+
+        combined_client.write_all(message).await?;
+
+        let mut buf = vec![0_u8; message.len()];
+        let nr = combined_client.read_exact(&mut buf).await?;
+        assert_eq!(nr, message.len());
+        assert_eq!(buf, message);
 
         Ok(())
     }

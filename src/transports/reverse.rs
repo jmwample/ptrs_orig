@@ -25,7 +25,7 @@ impl Reverse {
         Reverse {}
     }
 
-    async fn wrap<'a, A>(&self, a: A) -> Result<Box<dyn Stream + 'a>>
+    async fn wrap_inner<'a, A>(&self, a: A) -> Result<Box<dyn Stream + 'a>>
     where
         A: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'a,
     {
@@ -77,7 +77,7 @@ where
     A: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'a,
 {
     fn wrap(&self, a: A) -> impl Future<Output = Result<Box<dyn Stream + 'a>>> {
-        self.wrap(a)
+        self.wrap_inner(a)
     }
 }
 
