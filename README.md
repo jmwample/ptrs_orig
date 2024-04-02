@@ -1,5 +1,8 @@
 
-# Pluggable Transports in Rust (PTRS)
+**This repository has been archived in favor of a newer iteration of the ptrs interface**
+
+# Pluggable Transports in Rust (PTRS) **ARCHIVED**
+
 
 <p>
   <a href="https://github.com/jmwample/ptrs/actions/workflows/rust.yml">
